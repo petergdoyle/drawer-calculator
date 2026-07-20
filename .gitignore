@@ -1,0 +1,25 @@
+# Python caches and compiler files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Python virtual environment
+.venv/
+venv/
+ENV/
+
+# Local application database & persistent homelab data
+data/
+*.db
+*.db-journal
+
+# Streamlit process and logs
+.streamlit.pid
+streamlit.log
+nohup.out
+.streamlit/config.toml
+
+# OS/IDE files
+.DS_Store
+.vscode/
+.idea/

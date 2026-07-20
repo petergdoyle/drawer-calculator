@@ -1,0 +1,11 @@
+version: '3.8'
+
+services:
+  drawer-calculator:
+    build: .
+    container_name: drawer-calculator
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
