@@ -116,6 +116,23 @@ with col2:
     """, unsafe_allow_html=True)
 
     st.markdown("""
+    <div class="card">
+        <div class="card-title">
+            <span style="color: #60a5fa;">🧩</span> Joint Spacing Layout
+        </div>
+        <div class="card-content">
+            Design perfect, symmetrical joinery (Dovetails or Box Joints) using the Leigh RTJ400 jig system:
+            <ul>
+                <li><strong>Leigh Bit Library</strong>: Select from standard dovetail bits (50-8, 112-500, etc.) or straight bits (163, 166) stored in the database.</li>
+                <li><strong>Symmetry Optimizer</strong>: Sweeps drawer side heights to ensure identical half-pin sizes at each end, or an odd number of box fingers.</li>
+                <li><strong>Dado Collision Check</strong>: Flags and rejects heights where joint sockets intersect the 1/4" bottom slide dado (located 1/2" up) to prevent structural failures.</li>
+                <li><strong>Layout Blueprint</strong>: View 2D profile schematics labeled in both decimal and fractional inches (rounded to the nearest 1/32").</li>
+            </ul>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown("""
     <div class="tip-box">
         <strong>💡 Pro Woodworking Tip</strong>:<br>
         Always test fit a sample drawer box on a single set of slides before batching out your material. Small variations in plywood thickness or slide mounting positioning can affect the reveal and glide smoothness.
@@ -123,6 +140,11 @@ with col2:
     """, unsafe_allow_html=True)
 
 st.markdown("---")
-st.markdown("### 🚀 Ready to calculate?")
-if st.button("Go to Drawer Calculator", type="primary"):
-    st.switch_page("app_pages/calculator.py")
+st.markdown("### 🚀 Ready to design?")
+btn_col1, btn_col2 = st.columns(2)
+with btn_col1:
+    if st.button("Go to Drawer Calculator", type="primary", use_container_width=True):
+        st.switch_page("app_pages/calculator.py")
+with btn_col2:
+    if st.button("Go to Joint Spacing Layout", type="secondary", use_container_width=True):
+        st.switch_page("app_pages/joint_layout.py")

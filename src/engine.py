@@ -253,3 +253,260 @@ def generate_svg(data: Dict[str, Any], slide_cfg: Dict[str, Any] = None) -> str:
     </svg>"""
     
     return svg
+
+
+def optimize_joint_layout(
+    joinery_type: str, 
+    bit_cfg: Dict[str, Any], 
+    mode: str, 
+    target_val: float, 
+    pitch_type: str = "Half Pitch (0.75\")"
+) -> List[Dict[str, Any]]:
+    """
+    Search for valid drawer side heights and coordinate configurations that:
+    1. Enforce perfect symmetry (odd fingers for Box Joint, equal half-pins for Dovetail).
+    2. Check collisions with the Blum dado exclusion zone ([0.500", 0.750"]).
+    3. Are within the search bounds.
+    """
+    results = []
+    
+    # Determine the search bounds for box height H
+    if mode == "Target Box Height":
+        min_h = max(2.0, target_val - 1.0)
+        max_h = target_val + 1.0
+    else:  # Drawer Front Height
+        # valid box heights must be within 0.5" to 1.0" below the front height
+        min_h = max(2.0, target_val - 1.0)
+        max_h = target_val - 0.5
+
+    dado_start = 0.500
+    dado_end = 0.750
+    
+    if joinery_type.lower() == "box joint":
+        # Box joint finger size is the cutter diameter
+        F = bit_cfg["diameter"]
+        # Find candidates by sweeping odd integers N
+        # We want H = N * F
+        min_n = int(min_h / F)
+        max_n = int(max_h / F) + 1
+        
+        for N in range(min_n, max_n + 1):
+            if N % 2 == 0:
+                continue  # enforce odd finger counts for symmetry
+            
+            H = N * F
+            if H < min_h or H > max_h:
+                continue
+                
+            # Sockets are at odd indices i (starting with i=0 as finger, i=1 as socket)
+            # Socket intervals: [i * F, (i + 1) * F] for odd i
+            overlap = False
+            layout = []
+            
+            for i in range(N):
+                is_socket = (i % 2 == 1)
+                start_y = i * F
+                end_y = (i + 1) * F
+                
+                layout_item = {
+                    "type": "socket" if is_socket else "finger",
+                    "start": start_y,
+                    "end": end_y
+                }
+                layout.append(layout_item)
+                
+                if is_socket:
+                    # check overlap with dado
+                    if max(start_y, dado_start) < min(end_y, dado_end):
+                        overlap = True
+            
+            if not overlap:
+                # Calculate deviation from target height
+                if mode == "Target Box Height":
+                    dev = abs(H - target_val)
+                else:
+                    dev = abs(H - (target_val - 0.75))
+                
+                results.append({
+                    "height": H,
+                    "num_elements": N,
+                    "half_pin_size": 0.0,
+                    "layout": layout,
+                    "deviation": dev,
+                    "joinery_type": "Box Joint"
+                })
+                
+    else:  # Dovetail
+        # Dovetail configuration
+        D = bit_cfg["diameter"]
+        # Determine pitch P based on selection
+        P = 1.500 if "1.5" in pitch_type else 0.750
+        
+        # We sweep candidate heights H in steps of 1/32" (0.03125")
+        sweep_resolution = 0.03125
+        num_steps = int((max_h - min_h) / sweep_resolution) + 1
+        
+        for step in range(num_steps):
+            H = min_h + step * sweep_resolution
+            # Sweep tail counts N
+            min_n = 1
+            max_n = int(H / P) + 2
+            
+            for N in range(min_n, max_n + 1):
+                # Calculate half-pin size: H_pin = (H - (N - 1)*P - D) / 2
+                H_pin = (H - (N - 1) * P - D) / 2.0
+                
+                if H_pin < 0.1875 or H_pin > 0.500:
+                    continue
+                    
+                # Sockets (pin locations) cut out of the side board
+                overlap = False
+                layout = []
+                
+                # Bottom half-pin socket
+                layout.append({"type": "socket", "start": 0.0, "end": H_pin})
+                
+                # Tails and intermediate pins
+                for i in range(N):
+                    # Tail interval
+                    tail_start = H_pin + i * P
+                    tail_end = H_pin + D + i * P
+                    layout.append({"type": "tail", "start": tail_start, "end": tail_end})
+                    
+                    # If not the last tail, add intermediate socket
+                    if i < N - 1:
+                        sock_start = tail_end
+                        sock_end = H_pin + (i + 1) * P
+                        layout.append({"type": "socket", "start": sock_start, "end": sock_end})
+                        # check intermediate socket overlap with dado
+                        if max(sock_start, dado_start) < min(sock_end, dado_end):
+                            overlap = True
+                
+                # Top half-pin socket
+                layout.append({"type": "socket", "start": H - H_pin, "end": H})
+                
+                # Bottom and top half-pin socket check
+                if max(H - H_pin, dado_start) < min(H, dado_end):
+                    overlap = True
+                    
+                if not overlap:
+                    # Calculate deviation from target height
+                    if mode == "Target Box Height":
+                        dev = abs(H - target_val)
+                    else:
+                        dev = abs(H - (target_val - 0.75))
+                    
+                    results.append({
+                        "height": H,
+                        "num_elements": N,
+                        "half_pin_size": H_pin,
+                        "layout": sorted(layout, key=lambda x: x["start"]),
+                        "deviation": dev,
+                        "joinery_type": f"Dovetail ({pitch_type})"
+                    })
+                    break
+
+    # Sort results by deviation (closest to target height first)
+    results = sorted(results, key=lambda x: x["deviation"])
+    return results
+
+
+def generate_joint_plot(height: float, joinery_type: str, layout: List[Dict[str, Any]], bit_name: str):
+    """Generate a Matplotlib figure plotting the joint spacing layout schematic."""
+    import matplotlib.pyplot as plt
+    import matplotlib.patches as patches
+
+    fig, ax = plt.subplots(figsize=(5.5, 7.5))
+    board_w = 2.0
+    
+    # Plot background board
+    ax.add_patch(patches.Rectangle(
+        (0, 0), board_w, height, 
+        facecolor="#18181b", edgecolor="#3f3f46", linewidth=2.5, 
+        label="Drawer Side Panel"
+    ))
+    
+    # Plot Blum dado exclusion band [0.500", 0.750"]
+    ax.add_patch(patches.Rectangle(
+        (0, 0.500), board_w, 0.250, 
+        facecolor="#7f1d1d", alpha=0.45, hatch="//", 
+        edgecolor="#ef4444", linewidth=1.5, linestyle="--", 
+        label="Blum Runner Dado (1/4\" @ 1/2\" up)"
+    ))
+    
+    # Draw sockets & wood fingers
+    for item in layout:
+        start_y = item["start"]
+        end_y = item["end"]
+        thick = end_y - start_y
+        
+        if item["type"] == "socket":
+            # Left cutout
+            ax.add_patch(patches.Rectangle(
+                (0, start_y), 0.45, thick, 
+                facecolor="#09090b", edgecolor="#7f1d1d", linewidth=1
+            ))
+            # Right cutout
+            ax.add_patch(patches.Rectangle(
+                (board_w - 0.45, start_y), 0.45, thick, 
+                facecolor="#09090b", edgecolor="#7f1d1d", linewidth=1
+            ))
+        else:
+            # Wood structure elements (fingers/tails)
+            color_face = "#b45309" if "dovetail" in joinery_type.lower() else "#047857"
+            color_edge = "#d97706" if "dovetail" in joinery_type.lower() else "#059669"
+            label_text = "Dovetail Tail" if "dovetail" in joinery_type.lower() else "Finger Joint"
+            
+            ax.add_patch(patches.Rectangle(
+                (0, start_y), 0.45, thick, 
+                facecolor=color_face, edgecolor=color_edge, alpha=0.6, linewidth=1
+            ))
+            ax.add_patch(patches.Rectangle(
+                (board_w - 0.45, start_y), 0.45, thick, 
+                facecolor=color_face, edgecolor=color_edge, alpha=0.6, linewidth=1
+            ))
+
+    # Add Y-coordinate markers on ticks
+    y_ticks = [0.0, height]
+    for item in layout:
+        y_ticks.extend([item["start"], item["end"]])
+    
+    # Deduplicate and sort ticks
+    y_ticks = sorted(list(set(round(y, 5) for y in y_ticks)))
+    
+    # Prune overlaps to keep plot readable
+    pruned_ticks = []
+    pruned_labels = []
+    for val in y_ticks:
+        if not any(abs(val - pv) < 0.05 for pv in pruned_ticks):
+            pruned_ticks.append(val)
+            frac_str = float_to_fraction(val, 32).replace('"', '')
+            pruned_labels.append(f"{val:.3f}\" ({frac_str}\")")
+            ax.axhline(y=val, color="#27272a", linestyle=":", linewidth=0.8)
+    
+    ax.set_yticks(pruned_ticks)
+    ax.set_yticklabels(pruned_labels, fontsize=8.5, color="#a1a1aa")
+    
+    ax.set_xticks([0.225, board_w / 2.0, board_w - 0.225])
+    ax.set_xticklabels(["Joint End A", "Drawer Center", "Joint End B"], fontsize=9.5, color="#a1a1aa")
+    
+    ax.set_xlim(-0.25, board_w + 0.25)
+    ax.set_ylim(-0.15, height + 0.15)
+    ax.set_title(f"Joint Profile (Height: {height:.3f}\", Bit: {bit_name})", fontsize=11.5, color="#f4f4f5", pad=12, fontweight="bold")
+    
+    # Theme configuration
+    ax.set_facecolor("#09090b")
+    fig.patch.set_facecolor("#09090b")
+    for spine in ax.spines.values():
+        spine.set_color('#27272a')
+        spine.set_linewidth(1.2)
+    ax.tick_params(colors='#71717a')
+    
+    ax.legend(
+        facecolor="#18181b", edgecolor="#27272a", labelcolor="#e4e4e7", 
+        loc="lower center", bbox_to_anchor=(0.5, -0.16), ncol=2, fontsize=8.5
+    )
+    
+    plt.tight_layout()
+    return fig
+

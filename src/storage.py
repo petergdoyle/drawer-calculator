@@ -62,6 +62,36 @@ def init_db() -> None:
                 ('Blum Tandem (1/2" Wood)', 0.625, 1.0, 0.125, 0.5, 0.21875, 6.0, 3.5),
                 ('Generic Undermount', 0.375, 1.0, 0.125, 0.5, 0.21875, 6.0, 3.5)
             """)
+
+        # Create joint_bits table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS joint_bits (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT UNIQUE NOT NULL,
+                bit_type TEXT NOT NULL,
+                diameter REAL NOT NULL,
+                angle REAL NOT NULL,
+                pitch REAL NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        # Prepopulate default Leigh bits if table is empty
+        cursor.execute("SELECT COUNT(*) FROM joint_bits")
+        if cursor.fetchone()[0] == 0:
+            cursor.execute("""
+                INSERT INTO joint_bits (name, bit_type, diameter, angle, pitch)
+                VALUES 
+                ('50-8', 'dovetail', 0.250, 8.0, 0.750),
+                ('60-8', 'dovetail', 0.3125, 8.0, 0.750),
+                ('70-8', 'dovetail', 0.375, 8.0, 0.750),
+                ('75-8', 'dovetail', 0.500, 8.0, 0.750),
+                ('112-500', 'dovetail', 0.500, 12.0, 0.750),
+                ('128-500', 'dovetail', 0.500, 18.0, 0.750),
+                ('140-8', 'dovetail', 0.3125, 8.0, 0.750),
+                ('163', 'box_joint', 0.09375, 0.0, 0.1875),
+                ('166', 'box_joint', 0.1875, 0.0, 0.375)
+            """)
             
         conn.commit()
     finally:
@@ -232,6 +262,38 @@ def get_slide_by_name(name: str) -> Optional[Dict[str, Any]]:
         return dict(row) if row else None
     except sqlite3.Error as e:
         print(f"Database fetch slide by name error: {e}")
+        return None
+    finally:
+        conn.close()
+
+def list_joint_bits() -> List[Dict[str, Any]]:
+    """List all saved joint bits, ordered by name ASC."""
+    init_db()
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM joint_bits ORDER BY name ASC")
+        rows = cursor.fetchall()
+        return [dict(row) for row in rows]
+    except sqlite3.Error as e:
+        print(f"Database list joint bits error: {e}")
+        return []
+    finally:
+        conn.close()
+
+def get_joint_bit_by_name(name: str) -> Optional[Dict[str, Any]]:
+    """Retrieve joint bit details by name."""
+    init_db()
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM joint_bits WHERE name = ?", (name,))
+        row = cursor.fetchone()
+        return dict(row) if row else None
+    except sqlite3.Error as e:
+        print(f"Database fetch joint bit by name error: {e}")
         return None
     finally:
         conn.close()
