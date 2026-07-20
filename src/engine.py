@@ -2,10 +2,19 @@ import math
 from fractions import Fraction
 from typing import Dict, Any, Tuple, List
 
-# Standard Hardware Constants
+# Default Blum Slide Config
+DEFAULT_SLIDE_CFG = {
+    "name": 'Blum Tandem (5/8" Wood)',
+    "width_tolerance": 0.375,
+    "height_tolerance": 1.0,
+    "min_depth_offset": 0.125,
+    "bottom_recess": 0.5,
+    "extension_below": 0.21875,
+    "min_cab_width": 6.0,
+    "min_cab_height": 3.5
+}
+
 MATERIAL_THICKNESS = 0.625  # 5/8" standard drawer wood thickness
-WIDTH_TOLERANCE = 0.375     # 3/8" (0.1875" per side) for Blum Tandem
-HEIGHT_TOLERANCE = 1.000    # 1.000" total height clearance
 REVEAL = 0.09375            # 3/32" inset front reveal all around
 STANDARD_SLIDES = [9.0, 12.0, 15.0, 18.0, 21.0, 24.0, 27.0, 30.0]
 
@@ -27,16 +36,18 @@ def float_to_fraction(val: float, max_denominator: int = 16) -> str:
         else:
             return f'{f.numerator}/{f.denominator}"'
 
-def calculate_drawer_box(cabinet_w: float, cabinet_h: float, slide_len: float) -> Dict[str, Any]:
+def calculate_drawer_box(cabinet_w: float, cabinet_h: float, slide_len: float, slide_cfg: Dict[str, Any] = None) -> Dict[str, Any]:
     """
-    Given Cabinet Opening size, calculate optimal Drawer Box dimensions.
+    Given Cabinet Opening size and slide configuration, calculate optimal Drawer Box dimensions.
     """
-    drawer_w = cabinet_w - WIDTH_TOLERANCE
-    drawer_h = cabinet_h - HEIGHT_TOLERANCE
+    if slide_cfg is None:
+        slide_cfg = DEFAULT_SLIDE_CFG
+
+    drawer_w = cabinet_w - slide_cfg["width_tolerance"]
+    drawer_h = cabinet_h - slide_cfg["height_tolerance"]
     drawer_d = slide_len
 
     inside_w = drawer_w - (2 * MATERIAL_THICKNESS)
-    # Drawer box bottom is recessed, but inner depth (length front-to-back) is:
     inside_d = drawer_d - (2 * MATERIAL_THICKNESS)
 
     # Inset front details (reveal is applied all around the cabinet opening)
@@ -54,16 +65,20 @@ def calculate_drawer_box(cabinet_w: float, cabinet_h: float, slide_len: float) -
         "inside_depth": inside_d,
         "inset_width": inset_w,
         "inset_height": inset_h,
-        "material_thickness": MATERIAL_THICKNESS
+        "material_thickness": MATERIAL_THICKNESS,
+        "slide_name": slide_cfg["name"]
     }
 
-def calculate_cabinet_opening(drawer_w: float, drawer_h: float, slide_len: float) -> Dict[str, Any]:
+def calculate_cabinet_opening(drawer_w: float, drawer_h: float, slide_len: float, slide_cfg: Dict[str, Any] = None) -> Dict[str, Any]:
     """
-    Given target Drawer Box size, calculate required Cabinet Opening space.
+    Given target Drawer Box size and slide configuration, calculate required Cabinet Opening space.
     """
-    cabinet_w = drawer_w + WIDTH_TOLERANCE
-    cabinet_h = drawer_h + HEIGHT_TOLERANCE
-    cabinet_d = slide_len + 0.125  # Blum Tandem recommends slide length + 1/8" min cabinet depth
+    if slide_cfg is None:
+        slide_cfg = DEFAULT_SLIDE_CFG
+
+    cabinet_w = drawer_w + slide_cfg["width_tolerance"]
+    cabinet_h = drawer_h + slide_cfg["height_tolerance"]
+    cabinet_d = slide_len + slide_cfg["min_depth_offset"]
 
     inside_w = drawer_w - (2 * MATERIAL_THICKNESS)
     inside_d = slide_len - (2 * MATERIAL_THICKNESS)
@@ -83,33 +98,41 @@ def calculate_cabinet_opening(drawer_w: float, drawer_h: float, slide_len: float
         "inside_depth": inside_d,
         "inset_width": inset_w,
         "inset_height": inset_h,
-        "material_thickness": MATERIAL_THICKNESS
+        "material_thickness": MATERIAL_THICKNESS,
+        "slide_name": slide_cfg["name"]
     }
 
-def validate_inputs(width: float, height: float, slide_len: float) -> List[str]:
+def validate_inputs(width: float, height: float, slide_len: float, slide_cfg: Dict[str, Any] = None) -> List[str]:
     """
-    Validate size inputs and return a list of warnings or errors.
+    Validate size inputs against slide specifications and return a list of warnings.
     """
+    if slide_cfg is None:
+        slide_cfg = DEFAULT_SLIDE_CFG
+
     warnings = []
     if width <= 0 or height <= 0:
         warnings.append("Dimensions must be greater than zero.")
         return warnings
 
-    if width < 6.0:
-        warnings.append(f"Cabinet opening width ({width}\") is narrow. Blum locking devices require a drawer width of at least 4.875\".")
+    min_drawer_w = slide_cfg["min_cab_width"] - slide_cfg["width_tolerance"]
+    if width < slide_cfg["min_cab_width"]:
+        warnings.append(f"Cabinet opening width ({width}\") is narrow. {slide_cfg['name']} locking devices require a drawer width of at least {min_drawer_w:.3f}\".")
     
-    if height < 3.5:
-        warnings.append(f"Cabinet opening height ({height}\") is very low. Blum undermount slides require at least 1.0\" height clearance.")
+    if height < slide_cfg["min_cab_height"]:
+        warnings.append(f"Cabinet opening height ({height}\") is very low. {slide_cfg['name']} undermount slides require at least {slide_cfg['height_tolerance']:.3f}\" height clearance.")
     
     if slide_len not in STANDARD_SLIDES:
-        warnings.append(f"Slide length {slide_len}\" is non-standard. Standard Blum Tandem lengths are: {', '.join([str(int(s)) for s in STANDARD_SLIDES])}\".")
+        warnings.append(f"Slide length {slide_len}\" is non-standard. Standard lengths are: {', '.join([str(int(s)) for s in STANDARD_SLIDES])}\".")
 
     return warnings
 
-def generate_svg(data: Dict[str, Any]) -> str:
+def generate_svg(data: Dict[str, Any], slide_cfg: Dict[str, Any] = None) -> str:
     """
     Generate an interactive 2D wireframe SVG representation of the drawer box inside the carcass.
     """
+    if slide_cfg is None:
+        slide_cfg = DEFAULT_SLIDE_CFG
+
     cab_w = data["cabinet_width"]
     cab_h = data["cabinet_height"]
     dr_w = data["drawer_width"]
@@ -141,10 +164,9 @@ def generate_svg(data: Dict[str, Any]) -> str:
     cab_x = (vb_w - draw_cab_w) / 2
     cab_y = (vb_h - draw_cab_h) / 2
 
-    # Drawer Box clearances: Blum Tandem requires 3/16" left/right and 1/2" bottom (for locking mechanism)
-    # The height clearance is 1" total, so we assume 0.5" top and 0.5" bottom clearance
-    dr_x = cab_x + (0.1875 * scale)
-    dr_y = cab_y + (0.5 * scale)
+    # Drawer Box clearances: slide width tolerance divided equally, height tolerance divided equally
+    dr_x = cab_x + ((slide_cfg["width_tolerance"] / 2.0) * scale)
+    dr_y = cab_y + ((slide_cfg["height_tolerance"] / 2.0) * scale)
 
     # Inset front offset (3/32" reveal all around)
     ins_x = cab_x + (REVEAL * scale)
@@ -182,22 +204,22 @@ def generate_svg(data: Dict[str, Any]) -> str:
                 <path d="M 0 0 L 10 5 L 0 10 z" class="dim-arrow"/>
             </marker>
         </defs>
-
+ 
         <!-- Dynamic Grid Pattern -->
         <g stroke="#1f1f23" stroke-width="1">
             <path d="M 0,50 L {vb_w},50 M 0,100 L {vb_w},100 M 0,150 L {vb_w},150 M 0,200 L {vb_w},200 M 0,250 L {vb_w},250 M 0,300 L {vb_w},300 M 0,350 L {vb_w},350 M 0,400 L {vb_w},400 M 0,450 L {vb_w},450" />
             <path d="M 50,0 L 50,{vb_h} M 100,0 L 100,{vb_h} M 150,0 L 150,{vb_h} M 200,0 L 200,{vb_h} M 250,0 L 250,{vb_h} M 300,0 L 300,{vb_h} M 350,0 L 350,{vb_h} M 400,0 L 400,{vb_h} M 450,0 L 450,{vb_h} M 500,0 L 500,{vb_h} M 550,0 L 550,{vb_h} M 600,0 L 600,{vb_h} M 650,0 L 650,{vb_h} M 700,0 L 700,{vb_h} M 750,0 L 750,{vb_h}" />
         </g>
-
+ 
         <!-- 1. Cabinet Opening -->
         <rect x="{cab_x}" y="{cab_y}" width="{draw_cab_w}" height="{draw_cab_h}" class="cabinet-line" />
         
         <!-- 2. Inset Drawer Front (dashed reveal guide) -->
         <rect x="{ins_x}" y="{ins_y}" width="{draw_ins_w}" height="{draw_ins_h}" rx="3" class="inset-front" />
-
+ 
         <!-- 3. Drawer Box Outer Boundary -->
         <rect x="{dr_x}" y="{dr_y}" width="{draw_dr_w}" height="{draw_dr_h}" rx="2" class="drawer-outer" />
-
+ 
         <!-- 4. Drawer Box Interior (Bottom and Side wood thicknesses) -->
         <!-- Left Side Inner Wall -->
         <line x1="{dr_x + draw_thick}" y1="{dr_y}" x2="{dr_x + draw_thick}" y2="{dr_y + draw_dr_h - draw_thick}" class="drawer-inner" />
@@ -205,24 +227,24 @@ def generate_svg(data: Dict[str, Any]) -> str:
         <line x1="{dr_x + draw_dr_w - draw_thick}" y1="{dr_y}" x2="{dr_x + draw_dr_w - draw_thick}" y2="{dr_y + draw_dr_h - draw_thick}" class="drawer-inner" />
         <!-- Bottom Panel Inner Wall -->
         <line x1="{dr_x + draw_thick}" y1="{dr_y + draw_dr_h - draw_thick}" x2="{dr_x + draw_dr_w - draw_thick}" y2="{dr_y + draw_dr_h - draw_thick}" class="drawer-inner" />
-
+ 
         <!-- 5. Dimension Markers & Annotations -->
         <!-- Cabinet Width Dimension -->
         <line x1="{cab_x}" y1="{cab_y - 25}" x2="{cab_x + draw_cab_w}" y2="{cab_y - 25}" class="dim-line" marker-start="url(#arrow-start)" marker-end="url(#arrow-end)" />
         <text x="{cab_x + draw_cab_w / 2}" y="{cab_y - 35}" class="text-cab">Cabinet Width: {cab_w_str} ({cab_w:.3f}")</text>
-
+ 
         <!-- Cabinet Height Dimension -->
         <line x1="{cab_x - 25}" y1="{cab_y}" x2="{cab_x - 25}" y2="{cab_y + draw_cab_h}" class="dim-line" marker-start="url(#arrow-start)" marker-end="url(#arrow-end)" />
         <text x="{cab_x - 35}" y="{cab_y + draw_cab_h / 2}" class="text-cab" transform="rotate(-90, {cab_x - 35}, {cab_y + draw_cab_h / 2})">Cabinet Height: {cab_h_str} ({cab_h:.3f}")</text>
-
+ 
         <!-- Drawer Width Dimension -->
         <line x1="{dr_x}" y1="{dr_y + draw_dr_h / 2}" x2="{dr_x + draw_dr_w}" y2="{dr_y + draw_dr_h / 2}" class="dim-line" marker-start="url(#arrow-start)" marker-end="url(#arrow-end)" />
         <text x="{dr_x + draw_dr_w / 2}" y="{dr_y + draw_dr_h / 2 - 8}" class="text-dr">Drawer Width: {dr_w_str} ({dr_w:.3f}")</text>
-
+ 
         <!-- Drawer Height Dimension -->
         <line x1="{dr_x + draw_dr_w / 2}" y1="{dr_y}" x2="{dr_x + draw_dr_w / 2}" y2="{dr_y + draw_dr_h}" class="dim-line" marker-start="url(#arrow-start)" marker-end="url(#arrow-end)" />
         <text x="{dr_x + draw_dr_w / 2 - 8}" y="{dr_y + draw_dr_h / 2}" class="text-dr" transform="rotate(-90, {dr_x + draw_dr_w / 2 - 8}, {dr_y + draw_dr_h / 2})">Drawer Height: {dr_h_str} ({dr_h:.3f}")</text>
-
+ 
         <!-- Inset Front Label (Drawn in bottom right area) -->
         <text x="{cab_x + draw_cab_w - 90}" y="{cab_y + draw_cab_h - 20}" class="text-ins">Inset Front: {ins_w_str} x {ins_h_str}</text>
         
