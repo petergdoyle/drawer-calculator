@@ -81,9 +81,20 @@ with col1:
     bit_names = [b["name"] for b in filtered_bits]
     
     # 2. Selectable Bit Dropdown
+    def bit_display_format(name):
+        b = next((x for x in filtered_bits if x["name"] == name), None)
+        if not b:
+            return name
+        dia_frac = float_to_fraction(b["diameter"]).replace('"', '')
+        if b["bit_type"] == "dovetail":
+            return f"{name} ({dia_frac}\" @ {b['angle']:.0f}° Dovetail)"
+        else:
+            return f"{name} ({dia_frac}\" Box Joint)"
+
     selected_bit_name = st.selectbox(
         "Leigh RTJ400 Bit Profile",
         options=bit_names,
+        format_func=bit_display_format,
         key="selected_bit_name"
     )
     
