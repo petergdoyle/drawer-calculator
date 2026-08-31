@@ -6,8 +6,11 @@ from src.engine import (
     validate_inputs, 
     generate_svg, 
     float_to_fraction,
-    STANDARD_SLIDES
+    STANDARD_SLIDES,
+    generate_csv_cutlist,
+    generate_txt_summary
 )
+from src.ui_helpers import render_dimension_input
 from src.storage import save_setup, list_setups, delete_setup, list_slides
 
 # Custom Style Injections
@@ -149,19 +152,21 @@ mode = st.sidebar.selectbox(
 # Render inputs reactive to chosen mode
 if mode == "Drawer Box Mode":
     st.sidebar.subheader("Cabinet Opening Inputs")
-    cab_w = st.sidebar.number_input(
-        "Cabinet Opening Width (in)", 
-        min_value=1.0, 
-        max_value=120.0, 
-        step=0.125, 
-        key="cab_w"
+    cab_w = render_dimension_input(
+        "Cabinet Opening Width", 
+        key="cab_w",
+        default_val=20.0,
+        min_val=1.0, 
+        max_val=120.0, 
+        sidebar=True
     )
-    cab_h = st.sidebar.number_input(
-        "Cabinet Opening Height (in)", 
-        min_value=1.0, 
-        max_value=120.0, 
-        step=0.125, 
-        key="cab_h"
+    cab_h = render_dimension_input(
+        "Cabinet Opening Height", 
+        key="cab_h",
+        default_val=6.0,
+        min_val=1.0, 
+        max_val=120.0, 
+        sidebar=True
     )
     slide_len = st.sidebar.selectbox(
         "Slide Nominal Length (in)", 
@@ -175,19 +180,21 @@ if mode == "Drawer Box Mode":
 
 else:  # Carcass Mode
     st.sidebar.subheader("Target Drawer Inputs")
-    dr_w = st.sidebar.number_input(
-        "Target Drawer Box Width (in)", 
-        min_value=1.0, 
-        max_value=120.0, 
-        step=0.125, 
-        key="dr_w"
+    dr_w = render_dimension_input(
+        "Target Drawer Box Width", 
+        key="dr_w",
+        default_val=19.625,
+        min_val=1.0, 
+        max_val=120.0, 
+        sidebar=True
     )
-    dr_h = st.sidebar.number_input(
-        "Target Drawer Box Height (in)", 
-        min_value=1.0, 
-        max_value=120.0, 
-        step=0.125, 
-        key="dr_h"
+    dr_h = render_dimension_input(
+        "Target Drawer Box Height", 
+        key="dr_h",
+        default_val=5.0,
+        min_val=1.0, 
+        max_val=120.0, 
+        sidebar=True
     )
     slide_len = st.sidebar.selectbox(
         "Slide Nominal Length (in)", 
@@ -273,6 +280,8 @@ with main_col:
     # Inside pieces measurements (assume front & back pieces captured between side panels)
     in_w = results["inside_width"]
     in_d = results["inside_depth"]
+    bot_w = results.get("bottom_width", in_w + 0.5)
+    bot_d = results.get("bottom_depth", in_d + 0.5)
     
     w_cab_str = float_to_fraction(w_cab)
     h_cab_str = float_to_fraction(h_cab)
@@ -283,17 +292,23 @@ with main_col:
     h_ins_str = float_to_fraction(h_ins)
     in_w_str = float_to_fraction(in_w)
     in_d_str = float_to_fraction(in_d)
+    bot_w_str = float_to_fraction(bot_w)
+    bot_d_str = float_to_fraction(bot_d)
 
-    # Calculate min cabinet depth dynamically
-    min_depth = d_dr + (selected_slide_cfg["min_depth_offset"] if selected_slide_cfg else 0.125)
+    # Calculate min cabinet depth dynamically for Overlay and Inset
+    min_dep_overlay = results.get("min_depth_overlay", d_dr + 0.65625)
+    min_dep_inset = results.get("min_depth_inset", min_dep_overlay + 0.75)
+    min_overlay_str = float_to_fraction(min_dep_overlay)
+    min_inset_str = float_to_fraction(min_dep_inset)
 
     summary_md = f"""
 | Component | Metric (in) | Fractional | Qty | Notes / Woodworking Directions |
 | :--- | :--- | :--- | :--- | :--- |
-| **Cabinet Opening** | {w_cab:.3f}" &times; {h_cab:.3f}" | {w_cab_str} &times; {h_cab_str} | 1 | Required carcass opening size. Min depth: {min_depth:.3f}" |
+| **Cabinet Opening** | {w_cab:.3f}" &times; {h_cab:.3f}" | {w_cab_str} &times; {h_cab_str} | 1 | Required opening space. Min depth: {min_overlay_str} ({min_dep_overlay:.3f}") Overlay / {min_inset_str} ({min_dep_inset:.3f}") Inset |
 | **Drawer Box Outside** | {w_dr:.3f}" &times; {h_dr:.3f}" &times; {d_dr:.3f}" | {w_dr_str} &times; {h_dr_str} &times; {d_dr_str} | 1 | Total external drawer dimensions. |
 | **Side Panels** | {d_dr:.3f}" &times; {h_dr:.3f}" | {d_dr_str} &times; {h_dr_str} | 2 | Left and right outer drawer walls (5/8" thickness). |
 | **Front & Back Panels** | {in_w:.3f}" &times; {h_dr:.3f}" | {in_w_str} &times; {h_dr_str} | 2 | Fit between sides. (Calculated width: Outside Width - 1.25"). |
+| **Drawer Bottom Panel** | {bot_w:.3f}" &times; {bot_d:.3f}" | {bot_w_str} &times; {bot_d_str} | 1 | Housed in 1/4" dado grooves (Includes 1/2" total insertion depth). |
 | **Inside Volume Space** | {in_w:.3f}" &times; {in_d:.3f}" | {in_w_str} &times; {in_d_str} | 1 | Maximum interior flat workspace clearance. |
 | **Inset Front Reveal** | {w_ins:.3f}" &times; {h_ins:.3f}" | {w_ins_str} &times; {h_ins_str} | 1 | Calculated with uniform 3/32" reveal clearances. |
 """
@@ -303,6 +318,41 @@ with main_col:
         recess_str = float_to_fraction(selected_slide_cfg["bottom_recess"])
         ext_str = float_to_fraction(selected_slide_cfg["extension_below"])
         st.info(f"💡 **Undermount Fit Tip**: **{slide_name}** slides require the drawer bottom to be recessed **{recess_str} ({selected_slide_cfg['bottom_recess']:.3f}\")** from the bottom edge of the drawer sides, and the drawer sides to extend **{ext_str} ({selected_slide_cfg['extension_below']:.5f}\")** below the drawer bottom to cover the runner mechanisms.")
+
+    # 5. Export / Download Section
+    st.subheader("📥 Export Calculation Results")
+    dl_col1, dl_col2, dl_col3 = st.columns(3)
+
+    csv_data = generate_csv_cutlist(results, selected_slide_cfg)
+    txt_data = generate_txt_summary(results, selected_slide_cfg)
+    svg_code = generate_svg(results, selected_slide_cfg)
+
+    file_prefix = f"drawer_{int(results['cabinet_width'])}x{int(results['cabinet_height'])}"
+
+    with dl_col1:
+        st.download_button(
+            label="📄 Cut List Summary (.txt)",
+            data=txt_data,
+            file_name=f"{file_prefix}_summary.txt",
+            mime="text/plain",
+            type="primary"
+        )
+    with dl_col2:
+        st.download_button(
+            label="📊 Spreadsheet Cut List (.csv)",
+            data=csv_data,
+            file_name=f"{file_prefix}_cutlist.csv",
+            mime="text/csv",
+            type="secondary"
+        )
+    with dl_col3:
+        st.download_button(
+            label="🖼️ 2D Overlay Diagram (.svg)",
+            data=svg_code,
+            file_name=f"{file_prefix}_diagram.svg",
+            mime="image/svg+xml",
+            type="secondary"
+        )
 
 with db_col:
     st.subheader("💾 Setup Management")
@@ -333,6 +383,27 @@ with db_col:
                 else:
                     st.error("Failed to save configuration. A configuration with this name may already exist.")
                     
+    # Callbacks for loading and deleting setups
+    def load_setup_callback(setup_item):
+        if setup_item['mode'] == 'drawer_box_mode':
+            st.session_state["mode_selector"] = "Drawer Box Mode"
+            st.session_state["cab_w"] = setup_item['cabinet_width']
+            st.session_state["cab_h"] = setup_item['cabinet_height']
+            st.session_state["cab_w_text"] = float_to_fraction(setup_item['cabinet_width']).replace('"', '')
+            st.session_state["cab_h_text"] = float_to_fraction(setup_item['cabinet_height']).replace('"', '')
+        else:
+            st.session_state["mode_selector"] = "Carcass Mode"
+            st.session_state["dr_w"] = setup_item['drawer_width']
+            st.session_state["dr_h"] = setup_item['drawer_height']
+            st.session_state["dr_w_text"] = float_to_fraction(setup_item['drawer_width']).replace('"', '')
+            st.session_state["dr_h_text"] = float_to_fraction(setup_item['drawer_height']).replace('"', '')
+        
+        st.session_state["slide_len"] = float(setup_item['slide_length'])
+        st.session_state["slide_type"] = setup_item.get('slide_name', 'Blum Tandem (5/8" Wood)')
+
+    def delete_setup_callback(setup_id):
+        delete_setup(setup_id)
+
     # List and Load saved configurations
     st.write("Saved Projects")
     saved_setups = list_setups()
@@ -358,25 +429,6 @@ with db_col:
                 # Small columns for action buttons
                 btn_col1, btn_col2 = st.columns(2)
                 with btn_col1:
-                    if st.button("Load", key=f"load_{item['id']}"):
-                        # Load data into session states
-                        if item['mode'] == 'drawer_box_mode':
-                            st.session_state.mode_selector = "Drawer Box Mode"
-                            st.session_state.cab_w = item['cabinet_width']
-                            st.session_state.cab_h = item['cabinet_height']
-                        else:
-                            st.session_state.mode_selector = "Carcass Mode"
-                            st.session_state.dr_w = item['drawer_width']
-                            st.session_state.dr_h = item['drawer_height']
-                        
-                        st.session_state.slide_len = item['slide_length']
-                        st.session_state.slide_type = saved_slide_name
-                        st.rerun()
-                        
+                    st.button("Load", key=f"load_{item['id']}", on_click=load_setup_callback, args=(item,))
                 with btn_col2:
-                    if st.button("Delete", key=f"del_{item['id']}"):
-                        if delete_setup(item['id']):
-                            st.warning(f"Deleted '{item['name']}'")
-                            st.rerun()
-                        else:
-                            st.error("Failed to delete setup.")
+                    st.button("Delete", key=f"del_{item['id']}", on_click=delete_setup_callback, args=(item['id'],))

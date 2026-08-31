@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from src.storage import list_joint_bits
 from src.engine import optimize_joint_layout, generate_joint_plot, float_to_fraction
+from src.ui_helpers import render_dimension_input
 
 st.markdown("""
 <style>
@@ -118,20 +119,22 @@ with col1:
     
     # 5. Inputs
     if calc_mode == "Target Box Height":
-        target_val = st.number_input(
-            "Target Drawer Box Height (in)",
-            min_value=3.0,
-            max_value=24.0,
-            value=6.0,
-            step=0.125
+        target_val = render_dimension_input(
+            "Target Drawer Box Height",
+            key="joint_target_box_h",
+            default_val=6.0,
+            min_val=3.0,
+            max_val=24.0,
+            sidebar=False
         )
     else:
-        target_val = st.number_input(
-            "Drawer Front Height (in)",
-            min_value=4.0,
-            max_value=24.0,
-            value=8.0,
-            step=0.125
+        target_val = render_dimension_input(
+            "Drawer Front Height",
+            key="joint_drawer_front_h",
+            default_val=8.0,
+            min_val=4.0,
+            max_val=24.0,
+            sidebar=False
         )
         st.caption("Valid box heights will be constrained to 0.5\" to 1.0\" below the front height.")
 

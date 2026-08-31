@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from src.storage import list_slides, save_slide, delete_slide
 from src.engine import float_to_fraction
+from src.ui_helpers import render_dimension_input
 
 st.markdown("""
 <style>
@@ -135,15 +136,15 @@ with col2:
         
         c1, c2 = st.columns(2)
         with c1:
-            w_tol = st.number_input("Width Tolerance (in)", min_value=0.0, max_value=2.0, value=0.375, step=0.0625, format="%.4f", help="Total width clearance subtracted from cabinet opening width (standard is 3/8\").")
-            h_tol = st.number_input("Height Tolerance (in)", min_value=0.0, max_value=3.0, value=1.0, step=0.125, format="%.4f", help="Total height clearance subtracted from cabinet opening height (standard is 1\").")
-            depth_offset = st.number_input("Min Depth Offset (in)", min_value=0.0, max_value=1.0, value=0.125, step=0.0625, format="%.4f", help="Setback length offset beyond runner nominal length (standard is 1/8\").")
+            w_tol = render_dimension_input("Width Tolerance", key="new_slide_w_tol", default_val=0.375, min_val=0.0, max_val=2.0, help_text="Total width clearance (standard 3/8\").", sidebar=False)
+            h_tol = render_dimension_input("Height Tolerance", key="new_slide_h_tol", default_val=1.0, min_val=0.0, max_val=3.0, help_text="Total height clearance (standard 1\").", sidebar=False)
+            depth_offset = render_dimension_input("Min Depth Offset", key="new_slide_depth_offset", default_val=0.125, min_val=0.0, max_val=1.0, help_text="Setback offset beyond runner nominal length (standard 1/8\").", sidebar=False)
         with c2:
-            recess = st.number_input("Bottom Recess (in)", min_value=0.0, max_value=1.5, value=0.5, step=0.0625, format="%.4f", help="Recess height of drawer box bottom from side panels bottom edge (standard is 1/2\").")
-            ext_below = st.number_input("Extension Below Bottom (in)", min_value=0.0, max_value=1.0, value=0.21875, step=0.03125, format="%.5f", help="Extension of drawer side walls below drawer bottom panel (standard is 7/32\").")
-            min_w = st.number_input("Min. Opening Width (in)", min_value=1.0, max_value=24.0, value=6.0, step=0.5, format="%.2f", help="Minimum cabinet opening width required for locking devices (standard is 6.0\").")
+            recess = render_dimension_input("Bottom Recess", key="new_slide_recess", default_val=0.5, min_val=0.0, max_val=1.5, help_text="Recess height of drawer bottom (standard 1/2\").", sidebar=False)
+            ext_below = render_dimension_input("Extension Below", key="new_slide_ext_below", default_val=0.21875, min_val=0.0, max_val=1.0, help_text="Extension of drawer side walls below bottom (standard 7/32\").", sidebar=False)
+            min_w = render_dimension_input("Min Opening Width", key="new_slide_min_w", default_val=6.0, min_val=1.0, max_val=24.0, help_text="Minimum cabinet opening width (standard 6.0\").", sidebar=False)
             
-        min_h = st.number_input("Min. Opening Height (in)", min_value=1.0, max_value=24.0, value=3.5, step=0.5, format="%.2f", help="Minimum cabinet opening height required for slide clearance (standard is 3.5\").")
+        min_h = render_dimension_input("Min Opening Height", key="new_slide_min_h", default_val=3.5, min_val=1.0, max_val=24.0, help_text="Minimum cabinet opening height (standard 3.5\").", sidebar=False)
         
         submit = st.form_submit_button("Add Profile", type="primary")
         

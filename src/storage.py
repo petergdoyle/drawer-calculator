@@ -58,10 +58,13 @@ def init_db() -> None:
                 INSERT INTO slides 
                 (name, width_tolerance, height_tolerance, min_depth_offset, bottom_recess, extension_below, min_cab_width, min_cab_height)
                 VALUES 
-                ('Blum Tandem (5/8" Wood)', 0.375, 1.0, 0.125, 0.5, 0.21875, 6.0, 3.5),
-                ('Blum Tandem (1/2" Wood)', 0.625, 1.0, 0.125, 0.5, 0.21875, 6.0, 3.5),
-                ('Generic Undermount', 0.375, 1.0, 0.125, 0.5, 0.21875, 6.0, 3.5)
+                ('Blum Tandem (5/8" Wood)', 0.375, 1.0, 0.65625, 0.5, 0.21875, 6.0, 3.5),
+                ('Blum Tandem (1/2" Wood)', 0.625, 1.0, 0.65625, 0.5, 0.21875, 6.0, 3.5),
+                ('Generic Undermount', 0.375, 1.0, 0.65625, 0.5, 0.21875, 6.0, 3.5)
             """)
+        else:
+            # Migration update for baseline slides depth offset (21/32" Blum standard)
+            cursor.execute("UPDATE slides SET min_depth_offset = 0.65625 WHERE min_depth_offset = 0.125")
 
         # Create joint_bits table
         cursor.execute("""
