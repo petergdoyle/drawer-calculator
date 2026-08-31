@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import re
 from src.engine import (
     calculate_drawer_box, 
     calculate_cabinet_opening, 
@@ -109,6 +110,8 @@ def inset_front_card(title: str, w_dec: float, w_frac: str, h_dec: float, h_frac
 st.sidebar.title("🔧 Parameters")
 
 # Initialize session states if empty
+if "project_name" not in st.session_state:
+    st.session_state.project_name = "Drawer Box Project"
 if "mode_selector" not in st.session_state:
     st.session_state.mode_selector = "Drawer Box Mode"
 if "cab_w" not in st.session_state:
@@ -123,6 +126,14 @@ if "slide_len" not in st.session_state:
     st.session_state.slide_len = 21.0
 if "slide_type" not in st.session_state:
     st.session_state.slide_type = 'Blum Tandem (5/8" Wood)'
+
+# Project / Configuration Name input
+proj_name = st.sidebar.text_input(
+    "Project / Drawer Name",
+    key="project_name",
+    help="Name your project to label exported reports and saved setups.",
+    placeholder="e.g., Kitchen Base Drawer 1"
+)
 
 # Fetch slides from database
 active_slides = list_slides()
@@ -260,13 +271,13 @@ with main_col:
 
     # 3. Interactive SVG Expander
     with st.expander("🖼️ View Interactive 2D Cavity Overlay & Clearance Map", expanded=True):
-        svg_code = generate_svg(results, selected_slide_cfg)
+        svg_code = generate_svg(results, selected_slide_cfg, project_name=proj_name)
         st.components.v1.html(svg_code, height=520, scrolling=False)
-        st.caption("Figure: Wireframe diagram showcasing Cabinet Cavity Opening (Dashed Blue), Inset Front Profile (Dashed Green), and Drawer Box Outside dimensions (Amber) with 5/8\" walls.")
+        st.caption(f"Figure: Wireframe diagram for '{proj_name}' showcasing Cabinet Cavity Opening (Dashed Blue), Inset Front Profile (Dashed Green), and Drawer Box Outside dimensions (Amber) with 5/8\" walls.")
 
     # 4. Copyable Markdown Summary Card
     st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
-    st.subheader("📋 Cut List & Workstation Summary")
+    st.subheader(f"📋 Cut List & Workstation Summary: {proj_name}")
     
     # Gather specs
     w_cab = results["cabinet_width"]
@@ -323,11 +334,14 @@ with main_col:
     st.subheader("📥 Export Calculation Results")
     dl_col1, dl_col2, dl_col3 = st.columns(3)
 
-    csv_data = generate_csv_cutlist(results, selected_slide_cfg)
-    txt_data = generate_txt_summary(results, selected_slide_cfg)
-    svg_code = generate_svg(results, selected_slide_cfg)
+    csv_data = generate_csv_cutlist(results, selected_slide_cfg, project_name=proj_name)
+    txt_data = generate_txt_summary(results, selected_slide_cfg, project_name=proj_name)
+    svg_code = generate_svg(results, selected_slide_cfg, project_name=proj_name)
 
-    file_prefix = f"drawer_{int(results['cabinet_width'])}x{int(results['cabinet_height'])}"
+    clean_proj_slug = re.sub(r'[^a-zA-Z0-9_\-]+', '_', proj_name.strip()).lower().strip('_')
+    if not clean_proj_slug:
+        clean_proj_slug = "drawer_project"
+    file_prefix = f"{clean_proj_slug}_{int(results['cabinet_width'])}x{int(results['cabinet_height'])}"
 
     with dl_col1:
         st.download_button(
@@ -358,9 +372,9 @@ with db_col:
     st.subheader("💾 Setup Management")
     
     # Form to save current setup
-    with st.form("save_setup_form", clear_on_submit=True):
+    with st.form("save_setup_form", clear_on_submit=False):
         st.write("Save Current Layout")
-        setup_name = st.text_input("Configuration Name", placeholder="e.g., Kitchen Base Drawer 1")
+        setup_name = st.text_input("Configuration Name", value=proj_name, placeholder="e.g., Kitchen Base Drawer 1")
         submit_save = st.form_submit_button("Save Configuration")
         
         if submit_save:
@@ -378,6 +392,7 @@ with db_col:
                     slide_name=slide_name
                 )
                 if saved:
+                    st.session_state["project_name"] = setup_name.strip()
                     st.success(f"Saved configuration: '{setup_name.strip()}'")
                     st.rerun()
                 else:
@@ -385,6 +400,7 @@ with db_col:
                     
     # Callbacks for loading and deleting setups
     def load_setup_callback(setup_item):
+        st.session_state["project_name"] = setup_item['name']
         if setup_item['mode'] == 'drawer_box_mode':
             st.session_state["mode_selector"] = "Drawer Box Mode"
             st.session_state["cab_w"] = setup_item['cabinet_width']

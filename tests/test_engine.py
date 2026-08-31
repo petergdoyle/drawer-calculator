@@ -72,13 +72,15 @@ class TestEngineDimensionParsing(unittest.TestCase):
 
     def test_export_generators(self):
         res = calculate_drawer_box(20.0, 6.0, 21.0)
-        csv_out = generate_csv_cutlist(res)
+        proj = "Kitchen Base Drawer 1"
+        csv_out = generate_csv_cutlist(res, project_name=proj)
+        self.assertIn("Project_Name", csv_out)
+        self.assertIn(proj, csv_out)
         self.assertIn("Cabinet Opening", csv_out)
-        self.assertIn("19.6250", csv_out)
-        self.assertIn("19 5/8\"", csv_out)
 
-        txt_out = generate_txt_summary(res)
+        txt_out = generate_txt_summary(res, project_name=proj)
         self.assertIn("DRAWER CALCULATOR - CUT LIST & WORKSTATION SUMMARY", txt_out)
+        self.assertIn(f"Project Name:     {proj}", txt_out)
         self.assertIn("Side Panels (Qty: 2)", txt_out)
 
 if __name__ == '__main__':

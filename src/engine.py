@@ -216,7 +216,7 @@ def validate_inputs(width: float, height: float, slide_len: float, slide_cfg: Di
 
     return warnings
 
-def generate_svg(data: Dict[str, Any], slide_cfg: Dict[str, Any] = None) -> str:
+def generate_svg(data: Dict[str, Any], slide_cfg: Dict[str, Any] = None, project_name: str = "Drawer Box Project") -> str:
     """
     Generate an interactive 2D wireframe SVG representation of the drawer box inside the carcass.
     """
@@ -301,6 +301,9 @@ def generate_svg(data: Dict[str, Any], slide_cfg: Dict[str, Any] = None) -> str:
             <path d="M 50,0 L 50,{vb_h} M 100,0 L 100,{vb_h} M 150,0 L 150,{vb_h} M 200,0 L 200,{vb_h} M 250,0 L 250,{vb_h} M 300,0 L 300,{vb_h} M 350,0 L 350,{vb_h} M 400,0 L 400,{vb_h} M 450,0 L 450,{vb_h} M 500,0 L 500,{vb_h} M 550,0 L 550,{vb_h} M 600,0 L 600,{vb_h} M 650,0 L 650,{vb_h} M 700,0 L 700,{vb_h} M 750,0 L 750,{vb_h}" />
         </g>
  
+        <!-- Project Title Header -->
+        <text x="{vb_w / 2}" y="24" class="text-cab" style="font-size: 15px; font-weight: 700; fill: #60a5fa;">Project: {project_name}</text>
+
         <!-- 1. Cabinet Opening -->
         <rect x="{cab_x}" y="{cab_y}" width="{draw_cab_w}" height="{draw_cab_h}" class="cabinet-line" />
         
@@ -344,6 +347,121 @@ def generate_svg(data: Dict[str, Any], slide_cfg: Dict[str, Any] = None) -> str:
     
     return svg
 
+def generate_csv_cutlist(results: Dict[str, Any], slide_cfg: Dict[str, Any] = None, project_name: str = "Drawer Box Project") -> str:
+    """Generate a CSV string representation of the drawer cut list."""
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "Project_Name",
+        "Component", "Qty", 
+        "Width_Decimal", "Width_Fractional", 
+        "Height_Decimal", "Height_Fractional", 
+        "Depth_Decimal", "Depth_Fractional", 
+        "Notes"
+    ])
+
+    w_cab = results["cabinet_width"]
+    h_cab = results["cabinet_height"]
+    w_dr = results["drawer_width"]
+    h_dr = results["drawer_height"]
+    d_dr = results["drawer_depth"]
+    in_w = results["inside_width"]
+    in_d = results["inside_depth"]
+    bot_w = results.get("bottom_width", in_w + 0.5)
+    bot_d = results.get("bottom_depth", in_d + 0.5)
+    w_ins = results["inset_width"]
+    h_ins = results["inset_height"]
+    min_dep_overlay = results.get("min_depth_overlay", d_dr + 0.65625)
+    min_dep_inset = results.get("min_depth_inset", min_dep_overlay + 0.75)
+
+    writer.writerow([project_name, "Cabinet Opening", 1, f"{w_cab:.4f}", float_to_fraction(w_cab), f"{h_cab:.4f}", float_to_fraction(h_cab), f"{min_dep_overlay:.4f}", float_to_fraction(min_dep_overlay), f"Min overlay depth: {min_dep_overlay:.4f}\", Min inset depth: {min_dep_inset:.4f}\""])
+    writer.writerow([project_name, "Drawer Box Outside", 1, f"{w_dr:.4f}", float_to_fraction(w_dr), f"{h_dr:.4f}", float_to_fraction(h_dr), f"{d_dr:.4f}", float_to_fraction(d_dr), "Total external drawer dimensions"])
+    writer.writerow([project_name, "Side Panels", 2, "-", "-", f"{h_dr:.4f}", float_to_fraction(h_dr), f"{d_dr:.4f}", float_to_fraction(d_dr), "Left and right outer drawer walls (5/8\" thickness)"])
+    writer.writerow([project_name, "Front & Back Panels", 2, f"{in_w:.4f}", float_to_fraction(in_w), f"{h_dr:.4f}", float_to_fraction(h_dr), "-", "-", "Fit between sides (Calculated width: Outside Width - 1.25\")"])
+    writer.writerow([project_name, "Drawer Bottom Panel", 1, f"{bot_w:.4f}", float_to_fraction(bot_w), "-", "-", f"{bot_d:.4f}", float_to_fraction(bot_d), "Cut size including 1/4\" dado insertion on 4 sides"])
+    writer.writerow([project_name, "Inside Workspace Clearance", 1, f"{in_w:.4f}", float_to_fraction(in_w), "-", "-", f"{in_d:.4f}", float_to_fraction(in_d), "Maximum flat interior workspace clearance"])
+    writer.writerow([project_name, "Inset Front Reveal", 1, f"{w_ins:.4f}", float_to_fraction(w_ins), f"{h_ins:.4f}", float_to_fraction(h_ins), "-", "-", "Calculated with uniform 3/32\" reveal clearances"])
+
+    return output.getvalue()
+
+
+def generate_txt_summary(results: Dict[str, Any], slide_cfg: Dict[str, Any] = None, project_name: str = "Drawer Box Project") -> str:
+    """Generate a clean text summary of the calculation results and cut list."""
+    slide_name = slide_cfg["name"] if slide_cfg else results.get("slide_name", "Undermount Slide")
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
+
+    w_cab = results["cabinet_width"]
+    h_cab = results["cabinet_height"]
+    w_dr = results["drawer_width"]
+    h_dr = results["drawer_height"]
+    d_dr = results["drawer_depth"]
+    in_w = results["inside_width"]
+    in_d = results["inside_depth"]
+    bot_w = results.get("bottom_width", in_w + 0.5)
+    bot_d = results.get("bottom_depth", in_d + 0.5)
+    w_ins = results["inset_width"]
+    h_ins = results["inset_height"]
+
+    min_dep_overlay = results.get("min_depth_overlay", d_dr + 0.65625)
+    min_dep_inset = results.get("min_depth_inset", min_dep_overlay + 0.75)
+    recess = slide_cfg["bottom_recess"] if slide_cfg else 0.5
+    ext_below = slide_cfg["extension_below"] if slide_cfg else 0.21875
+
+    txt = f"""========================================================================
+📐 DRAWER CALCULATOR - CUT LIST & WORKSTATION SUMMARY
+Project Name:     {project_name}
+Generated:        {now_str}
+Hardware Profile: {slide_name}
+Calculation Mode: {results.get('mode', 'drawer_box_mode').replace('_', ' ').title()}
+========================================================================
+
+--- OVERALL SPECIFICATIONS ---
+Cabinet Opening Width:      {w_cab:.4f}" ({float_to_fraction(w_cab)})
+Cabinet Opening Height:     {h_cab:.4f}" ({float_to_fraction(h_cab)})
+Min. Overlay Carcass Depth: {min_dep_overlay:.4f}" ({float_to_fraction(min_dep_overlay)})
+Min. Inset Carcass Depth:   {min_dep_inset:.4f}" ({float_to_fraction(min_dep_inset)}) [Includes 3/4" Front Setback]
+
+Drawer Box Outside Width:   {w_dr:.4f}" ({float_to_fraction(w_dr)})
+Drawer Box Outside Height:  {h_dr:.4f}" ({float_to_fraction(h_dr)})
+Drawer Box Outside Depth:   {d_dr:.4f}" ({float_to_fraction(d_dr)})
+
+Inside Workspace Width:     {in_w:.4f}" ({float_to_fraction(in_w)})
+Inside Workspace Depth:     {in_d:.4f}" ({float_to_fraction(in_d)})
+
+Inset Front Dimensions:     {w_ins:.4f}" x {h_ins:.4f}" ({float_to_fraction(w_ins)} x {float_to_fraction(h_ins)})
+
+--- CUT LIST BREAKDOWN ---
+1. Side Panels (Qty: 2)
+   - Height: {h_dr:.4f}" ({float_to_fraction(h_dr)})
+   - Length: {d_dr:.4f}" ({float_to_fraction(d_dr)})
+   - Material Thickness: 5/8" (0.625")
+
+2. Front & Back Panels (Qty: 2)
+   - Width:  {in_w:.4f}" ({float_to_fraction(in_w)})
+   - Height: {h_dr:.4f}" ({float_to_fraction(h_dr)})
+   - Material Thickness: 5/8" (0.625")
+
+3. Drawer Bottom Panel Cut Size (Qty: 1) [Housed in 1/4" Dado Grooves]
+   - Cut Width: {bot_w:.4f}" ({float_to_fraction(bot_w)})  [Inside Width + 1/2" Dado Insertion]
+   - Cut Depth: {bot_d:.4f}" ({float_to_fraction(bot_d)})  [Inside Depth + 1/2" Dado Insertion]
+
+4. Inside Workspace Clearance (Qty: 1)
+   - Clear Width: {in_w:.4f}" ({float_to_fraction(in_w)})
+   - Clear Depth: {in_d:.4f}" ({float_to_fraction(in_d)})
+
+5. Inset Drawer Front (Qty: 1)
+   - Width:  {w_ins:.4f}" ({float_to_fraction(w_ins)})
+   - Height: {h_ins:.4f}" ({float_to_fraction(h_ins)})
+   - Clearance Reveal: 3/32" (0.09375") all around
+
+--- HARDWARE & INSTALLATION SPECS ---
+- Bottom Recess Height:     {recess:.4f}" ({float_to_fraction(recess)})
+- Side Extension Below:     {ext_below:.5f}" ({float_to_fraction(ext_below)})
+- Rear Locking Dado Notch:  Standard 1/4" dado @ 1/2" up from bottom edge
+
+========================================================================
+"""
+    return txt
 
 def optimize_joint_layout(
     joinery_type: str, 
@@ -599,120 +717,5 @@ def generate_joint_plot(height: float, joinery_type: str, layout: List[Dict[str,
     
     plt.tight_layout()
     return fig
-
-
-def generate_csv_cutlist(results: Dict[str, Any], slide_cfg: Dict[str, Any] = None) -> str:
-    """Generate a CSV string representation of the drawer cut list."""
-    output = io.StringIO()
-    writer = csv.writer(output)
-    writer.writerow([
-        "Component", "Qty", 
-        "Width_Decimal", "Width_Fractional", 
-        "Height_Decimal", "Height_Fractional", 
-        "Depth_Decimal", "Depth_Fractional", 
-        "Notes"
-    ])
-
-    w_cab = results["cabinet_width"]
-    h_cab = results["cabinet_height"]
-    w_dr = results["drawer_width"]
-    h_dr = results["drawer_height"]
-    d_dr = results["drawer_depth"]
-    in_w = results["inside_width"]
-    in_d = results["inside_depth"]
-    bot_w = results.get("bottom_width", in_w + 0.5)
-    bot_d = results.get("bottom_depth", in_d + 0.5)
-    w_ins = results["inset_width"]
-    h_ins = results["inset_height"]
-    min_dep_overlay = results.get("min_depth_overlay", d_dr + 0.65625)
-    min_dep_inset = results.get("min_depth_inset", min_dep_overlay + 0.75)
-
-    writer.writerow(["Cabinet Opening", 1, f"{w_cab:.4f}", float_to_fraction(w_cab), f"{h_cab:.4f}", float_to_fraction(h_cab), f"{min_dep_overlay:.4f}", float_to_fraction(min_dep_overlay), f"Min overlay depth: {min_dep_overlay:.4f}\", Min inset depth: {min_dep_inset:.4f}\""])
-    writer.writerow(["Drawer Box Outside", 1, f"{w_dr:.4f}", float_to_fraction(w_dr), f"{h_dr:.4f}", float_to_fraction(h_dr), f"{d_dr:.4f}", float_to_fraction(d_dr), "Total external drawer dimensions"])
-    writer.writerow(["Side Panels", 2, "-", "-", f"{h_dr:.4f}", float_to_fraction(h_dr), f"{d_dr:.4f}", float_to_fraction(d_dr), "Left and right outer drawer walls (5/8\" thickness)"])
-    writer.writerow(["Front & Back Panels", 2, f"{in_w:.4f}", float_to_fraction(in_w), f"{h_dr:.4f}", float_to_fraction(h_dr), "-", "-", "Fit between sides (Calculated width: Outside Width - 1.25\")"])
-    writer.writerow(["Drawer Bottom Panel", 1, f"{bot_w:.4f}", float_to_fraction(bot_w), "-", "-", f"{bot_d:.4f}", float_to_fraction(bot_d), "Cut size including 1/4\" dado insertion on 4 sides"])
-    writer.writerow(["Inside Workspace Clearance", 1, f"{in_w:.4f}", float_to_fraction(in_w), "-", "-", f"{in_d:.4f}", float_to_fraction(in_d), "Maximum flat interior workspace clearance"])
-    writer.writerow(["Inset Front Reveal", 1, f"{w_ins:.4f}", float_to_fraction(w_ins), f"{h_ins:.4f}", float_to_fraction(h_ins), "-", "-", "Calculated with uniform 3/32\" reveal clearances"])
-
-    return output.getvalue()
-
-
-def generate_txt_summary(results: Dict[str, Any], slide_cfg: Dict[str, Any] = None) -> str:
-    """Generate a clean text summary of the calculation results and cut list."""
-    slide_name = slide_cfg["name"] if slide_cfg else results.get("slide_name", "Undermount Slide")
-    now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
-
-    w_cab = results["cabinet_width"]
-    h_cab = results["cabinet_height"]
-    w_dr = results["drawer_width"]
-    h_dr = results["drawer_height"]
-    d_dr = results["drawer_depth"]
-    in_w = results["inside_width"]
-    in_d = results["inside_depth"]
-    bot_w = results.get("bottom_width", in_w + 0.5)
-    bot_d = results.get("bottom_depth", in_d + 0.5)
-    w_ins = results["inset_width"]
-    h_ins = results["inset_height"]
-
-    min_dep_overlay = results.get("min_depth_overlay", d_dr + 0.65625)
-    min_dep_inset = results.get("min_depth_inset", min_dep_overlay + 0.75)
-    recess = slide_cfg["bottom_recess"] if slide_cfg else 0.5
-    ext_below = slide_cfg["extension_below"] if slide_cfg else 0.21875
-
-    txt = f"""========================================================================
-📐 DRAWER CALCULATOR - CUT LIST & WORKSTATION SUMMARY
-Generated: {now_str}
-Hardware Profile: {slide_name}
-Calculation Mode: {results.get('mode', 'drawer_box_mode').replace('_', ' ').title()}
-========================================================================
-
---- OVERALL SPECIFICATIONS ---
-Cabinet Opening Width:      {w_cab:.4f}" ({float_to_fraction(w_cab)})
-Cabinet Opening Height:     {h_cab:.4f}" ({float_to_fraction(h_cab)})
-Min. Overlay Carcass Depth: {min_dep_overlay:.4f}" ({float_to_fraction(min_dep_overlay)})
-Min. Inset Carcass Depth:   {min_dep_inset:.4f}" ({float_to_fraction(min_dep_inset)}) [Includes 3/4" Front Setback]
-
-Drawer Box Outside Width:   {w_dr:.4f}" ({float_to_fraction(w_dr)})
-Drawer Box Outside Height:  {h_dr:.4f}" ({float_to_fraction(h_dr)})
-Drawer Box Outside Depth:   {d_dr:.4f}" ({float_to_fraction(d_dr)})
-
-Inside Workspace Width:     {in_w:.4f}" ({float_to_fraction(in_w)})
-Inside Workspace Depth:     {in_d:.4f}" ({float_to_fraction(in_d)})
-
-Inset Front Dimensions:     {w_ins:.4f}" x {h_ins:.4f}" ({float_to_fraction(w_ins)} x {float_to_fraction(h_ins)})
-
---- CUT LIST BREAKDOWN ---
-1. Side Panels (Qty: 2)
-   - Height: {h_dr:.4f}" ({float_to_fraction(h_dr)})
-   - Length: {d_dr:.4f}" ({float_to_fraction(d_dr)})
-   - Material Thickness: 5/8" (0.625")
-
-2. Front & Back Panels (Qty: 2)
-   - Width:  {in_w:.4f}" ({float_to_fraction(in_w)})
-   - Height: {h_dr:.4f}" ({float_to_fraction(h_dr)})
-   - Material Thickness: 5/8" (0.625")
-
-3. Drawer Bottom Panel Cut Size (Qty: 1) [Housed in 1/4" Dado Grooves]
-   - Cut Width: {bot_w:.4f}" ({float_to_fraction(bot_w)})  [Inside Width + 1/2" Dado Insertion]
-   - Cut Depth: {bot_d:.4f}" ({float_to_fraction(bot_d)})  [Inside Depth + 1/2" Dado Insertion]
-
-4. Inside Workspace Clearance (Qty: 1)
-   - Clear Width: {in_w:.4f}" ({float_to_fraction(in_w)})
-   - Clear Depth: {in_d:.4f}" ({float_to_fraction(in_d)})
-
-5. Inset Drawer Front (Qty: 1)
-   - Width:  {w_ins:.4f}" ({float_to_fraction(w_ins)})
-   - Height: {h_ins:.4f}" ({float_to_fraction(h_ins)})
-   - Clearance Reveal: 3/32" (0.09375") all around
-
---- HARDWARE & INSTALLATION SPECS ---
-- Bottom Recess Height:     {recess:.4f}" ({float_to_fraction(recess)})
-- Side Extension Below:     {ext_below:.5f}" ({float_to_fraction(ext_below)})
-- Rear Locking Dado Notch:  Standard 1/4" dado @ 1/2" up from bottom edge
-
-========================================================================
-"""
-    return txt
 
 
