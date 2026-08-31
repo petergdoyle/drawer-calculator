@@ -246,7 +246,7 @@ with main_col:
         
     with m_col2:
         st.markdown(metric_card(
-            title="Drawer Box Height",
+            title="Max Drawer Box Height",
             value_decimal=results["drawer_height"],
             value_fraction=float_to_fraction(results["drawer_height"]),
             color_theme="amber"
@@ -273,7 +273,7 @@ with main_col:
     with st.expander("🖼️ View Interactive 2D Cavity Overlay & Clearance Map", expanded=True):
         svg_code = generate_svg(results, selected_slide_cfg, project_name=proj_name)
         st.components.v1.html(svg_code, height=520, scrolling=False)
-        st.caption(f"Figure: Wireframe diagram for '{proj_name}' showcasing Cabinet Cavity Opening (Dashed Blue), Inset Front Profile (Dashed Green), and Drawer Box Outside dimensions (Amber) with 5/8\" walls.")
+        st.caption(f"Figure: Wireframe diagram for '{proj_name}' showcasing Cabinet Cavity Opening (Dashed Blue), Inset Front Profile (Dashed Green), and Max Drawer Box Height clearance (Amber) with 5/8\" walls.")
 
     # 4. Copyable Markdown Summary Card
     st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
@@ -316,8 +316,8 @@ with main_col:
 | Component | Metric (in) | Fractional | Qty | Notes / Woodworking Directions |
 | :--- | :--- | :--- | :--- | :--- |
 | **Cabinet Opening** | {w_cab:.3f}" &times; {h_cab:.3f}" | {w_cab_str} &times; {h_cab_str} | 1 | Required opening space. Min depth: {min_overlay_str} ({min_dep_overlay:.3f}") Overlay / {min_inset_str} ({min_dep_inset:.3f}") Inset |
-| **Drawer Box Outside** | {w_dr:.3f}" &times; {h_dr:.3f}" &times; {d_dr:.3f}" | {w_dr_str} &times; {h_dr_str} &times; {d_dr_str} | 1 | Total external drawer dimensions. |
-| **Side Panels** | {d_dr:.3f}" &times; {h_dr:.3f}" | {d_dr_str} &times; {h_dr_str} | 2 | Left and right outer drawer walls (5/8" thickness). |
+| **Drawer Box Outside** | {w_dr:.3f}" &times; {h_dr:.3f}" &times; {d_dr:.3f}" | {w_dr_str} &times; {h_dr_str} &times; {d_dr_str} | 1 | Total external drawer dimensions (Max suggested height: {h_dr_str}). |
+| **Side Panels** | {d_dr:.3f}" &times; {h_dr:.3f}" | {d_dr_str} &times; {h_dr_str} | 2 | Left and right outer drawer walls (Max suggested height: {h_dr_str}). |
 | **Front & Back Panels** | {in_w:.3f}" &times; {h_dr:.3f}" | {in_w_str} &times; {h_dr_str} | 2 | Fit between sides. (Calculated width: Outside Width - 1.25"). |
 | **Drawer Bottom Panel** | {bot_w:.3f}" &times; {bot_d:.3f}" | {bot_w_str} &times; {bot_d_str} | 1 | Housed in 1/4" dado grooves (Includes 1/2" total insertion depth). |
 | **Inside Volume Space** | {in_w:.3f}" &times; {in_d:.3f}" | {in_w_str} &times; {in_d_str} | 1 | Maximum interior flat workspace clearance. |

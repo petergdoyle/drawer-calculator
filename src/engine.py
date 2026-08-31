@@ -336,8 +336,8 @@ def generate_svg(data: Dict[str, Any], slide_cfg: Dict[str, Any] = None, project
  
         <!-- Drawer Height Dimension -->
         <line x1="{dr_x + draw_dr_w / 2}" y1="{dr_y}" x2="{dr_x + draw_dr_w / 2}" y2="{dr_y + draw_dr_h}" class="dim-line" marker-start="url(#arrow-start)" marker-end="url(#arrow-end)" />
-        <text x="{dr_x + draw_dr_w / 2 - 8}" y="{dr_y + draw_dr_h / 2}" class="text-dr" transform="rotate(-90, {dr_x + draw_dr_w / 2 - 8}, {dr_y + draw_dr_h / 2})">Drawer Height: {dr_h_str} ({dr_h:.3f}")</text>
- 
+        <text x="{dr_x + draw_dr_w / 2 - 8}" y="{dr_y + draw_dr_h / 2}" class="text-dr" transform="rotate(-90, {dr_x + draw_dr_w / 2 - 8}, {dr_y + draw_dr_h / 2})">Max Drawer Height: {dr_h_str} ({dr_h:.3f}")</text>
+
         <!-- Inset Front Label (Drawn in bottom right area) -->
         <text x="{cab_x + draw_cab_w - 90}" y="{cab_y + draw_cab_h - 20}" class="text-ins">Inset Front: {ins_w_str} x {ins_h_str}</text>
         
@@ -375,8 +375,8 @@ def generate_csv_cutlist(results: Dict[str, Any], slide_cfg: Dict[str, Any] = No
     min_dep_inset = results.get("min_depth_inset", min_dep_overlay + 0.75)
 
     writer.writerow([project_name, "Cabinet Opening", 1, f"{w_cab:.4f}", float_to_fraction(w_cab), f"{h_cab:.4f}", float_to_fraction(h_cab), f"{min_dep_overlay:.4f}", float_to_fraction(min_dep_overlay), f"Min overlay depth: {min_dep_overlay:.4f}\", Min inset depth: {min_dep_inset:.4f}\""])
-    writer.writerow([project_name, "Drawer Box Outside", 1, f"{w_dr:.4f}", float_to_fraction(w_dr), f"{h_dr:.4f}", float_to_fraction(h_dr), f"{d_dr:.4f}", float_to_fraction(d_dr), "Total external drawer dimensions"])
-    writer.writerow([project_name, "Side Panels", 2, "-", "-", f"{h_dr:.4f}", float_to_fraction(h_dr), f"{d_dr:.4f}", float_to_fraction(d_dr), "Left and right outer drawer walls (5/8\" thickness)"])
+    writer.writerow([project_name, "Drawer Box Outside", 1, f"{w_dr:.4f}", float_to_fraction(w_dr), f"{h_dr:.4f}", float_to_fraction(h_dr), f"{d_dr:.4f}", float_to_fraction(d_dr), "Total external drawer dimensions (Max suggested height)"])
+    writer.writerow([project_name, "Side Panels", 2, "-", "-", f"{h_dr:.4f}", float_to_fraction(h_dr), f"{d_dr:.4f}", float_to_fraction(d_dr), "Left and right outer drawer walls (Max suggested height)"])
     writer.writerow([project_name, "Front & Back Panels", 2, f"{in_w:.4f}", float_to_fraction(in_w), f"{h_dr:.4f}", float_to_fraction(h_dr), "-", "-", "Fit between sides (Calculated width: Outside Width - 1.25\")"])
     writer.writerow([project_name, "Drawer Bottom Panel", 1, f"{bot_w:.4f}", float_to_fraction(bot_w), "-", "-", f"{bot_d:.4f}", float_to_fraction(bot_d), "Cut size including 1/4\" dado insertion on 4 sides"])
     writer.writerow([project_name, "Inside Workspace Clearance", 1, f"{in_w:.4f}", float_to_fraction(in_w), "-", "-", f"{in_d:.4f}", float_to_fraction(in_d), "Maximum flat interior workspace clearance"])
@@ -421,8 +421,8 @@ Cabinet Opening Height:     {h_cab:.4f}" ({float_to_fraction(h_cab)})
 Min. Overlay Carcass Depth: {min_dep_overlay:.4f}" ({float_to_fraction(min_dep_overlay)})
 Min. Inset Carcass Depth:   {min_dep_inset:.4f}" ({float_to_fraction(min_dep_inset)}) [Includes 3/4" Front Setback]
 
+Max Drawer Box Height:      {h_dr:.4f}" ({float_to_fraction(h_dr)}) [Max Suggested Clearance]
 Drawer Box Outside Width:   {w_dr:.4f}" ({float_to_fraction(w_dr)})
-Drawer Box Outside Height:  {h_dr:.4f}" ({float_to_fraction(h_dr)})
 Drawer Box Outside Depth:   {d_dr:.4f}" ({float_to_fraction(d_dr)})
 
 Inside Workspace Width:     {in_w:.4f}" ({float_to_fraction(in_w)})
@@ -432,7 +432,7 @@ Inset Front Dimensions:     {w_ins:.4f}" x {h_ins:.4f}" ({float_to_fraction(w_in
 
 --- CUT LIST BREAKDOWN ---
 1. Side Panels (Qty: 2)
-   - Height: {h_dr:.4f}" ({float_to_fraction(h_dr)})
+   - Height: {h_dr:.4f}" ({float_to_fraction(h_dr)}) [Max Suggested Height]
    - Length: {d_dr:.4f}" ({float_to_fraction(d_dr)})
    - Material Thickness: 5/8" (0.625")
 
