@@ -83,8 +83,8 @@ def metric_card(title: str, value_decimal: float, value_fraction: str, color_the
         margin-bottom: 1rem;
     ">
         <div style="font-size: 0.85rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">{title}</div>
-        <div style="font-size: 1.85rem; font-weight: 700; color: #f8fafc; line-height: 1.2;">{value_decimal:.3f}"</div>
-        <div style="font-size: 1.15rem; font-weight: 600; color: {theme['text']}; margin-top: 0.25rem;">{value_fraction}</div>
+        <div style="font-size: 1.85rem; font-weight: 700; color: #f8fafc; line-height: 1.2;">{value_fraction}</div>
+        <div style="font-size: 1.15rem; font-weight: 600; color: {theme['text']}; margin-top: 0.25rem;">({value_decimal:.3f}")</div>
     </div>
     """
 
@@ -101,8 +101,8 @@ def inset_front_card(title: str, w_dec: float, w_frac: str, h_dec: float, h_frac
         margin-bottom: 1rem;
     ">
         <div style="font-size: 0.85rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">{title}</div>
-        <div style="font-size: 1.5rem; font-weight: 700; color: #f8fafc; line-height: 1.2;">{w_dec:.3f}" &times; {h_dec:.3f}"</div>
-        <div style="font-size: 1.15rem; font-weight: 600; color: #34d399; margin-top: 0.25rem;">{w_frac} &times; {h_frac}</div>
+        <div style="font-size: 1.5rem; font-weight: 700; color: #f8fafc; line-height: 1.2;">{w_frac} &times; {h_frac}</div>
+        <div style="font-size: 1.15rem; font-weight: 600; color: #34d399; margin-top: 0.25rem;">({w_dec:.3f}" &times; {h_dec:.3f}")</div>
     </div>
     """
 
