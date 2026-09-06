@@ -153,7 +153,27 @@ def parse_dimension(val: Any, unit_system: str = "Fractional Inches (\")") -> Tu
     return None, f"Could not parse '{val}'. Try '19 5/8', '19.625', or '500 mm'."
 
 
-def calculate_drawer_box(cabinet_w: float, cabinet_h: float, slide_len: float, slide_cfg: Dict[str, Any] = None) -> Dict[str, Any]:
+def get_front_back_cut_width(drawer_w: float, material_thickness: float, joint_type: str) -> float:
+    """Calculate front & back panel cut width based on box joinery type."""
+    j_type = (joint_type or "").strip()
+    if j_type in ["Miter Joint", "Dovetail Joint", "Box Joint"]:
+        return drawer_w
+    elif j_type == "Dado Butt Joint":
+        return drawer_w - (2 * (material_thickness - 0.25))
+    else:
+        # Default for Butt Joint variations (Dominos, Dowels, Screws, Pocket Holes)
+        return drawer_w - (2 * material_thickness)
+
+def calculate_drawer_box(
+    cabinet_w: float, 
+    cabinet_h: float, 
+    slide_len: float, 
+    slide_cfg: Dict[str, Any] = None,
+    material_thickness: float = 0.625,
+    joint_type: str = 'Butt Joint (Dominos / Dowels)',
+    bottom_thickness: float = 0.25,
+    dado_depth: float = 0.375
+) -> Dict[str, Any]:
     """
     Given Cabinet Opening size and slide configuration, calculate optimal Drawer Box dimensions.
     """
@@ -164,11 +184,13 @@ def calculate_drawer_box(cabinet_w: float, cabinet_h: float, slide_len: float, s
     drawer_h = cabinet_h - slide_cfg["height_tolerance"]
     drawer_d = slide_len
 
-    inside_w = drawer_w - (2 * MATERIAL_THICKNESS)
-    inside_d = drawer_d - (2 * MATERIAL_THICKNESS)
+    inside_w = drawer_w - (2 * material_thickness)
+    inside_d = drawer_d - (2 * material_thickness)
 
-    bottom_w = inside_w + (2 * DADO_DEPTH)
-    bottom_d = inside_d + (2 * DADO_DEPTH)
+    bottom_w = inside_w + (2 * dado_depth)
+    bottom_d = inside_d + (2 * dado_depth)
+
+    front_back_cut_w = get_front_back_cut_width(drawer_w, material_thickness, joint_type)
 
     min_depth_offset = slide_cfg.get("min_depth_offset", 0.65625)
     min_depth_overlay = drawer_d + min_depth_offset
@@ -189,16 +211,28 @@ def calculate_drawer_box(cabinet_w: float, cabinet_h: float, slide_len: float, s
         "inside_depth": inside_d,
         "bottom_width": bottom_w,
         "bottom_depth": bottom_d,
-        "dado_depth": DADO_DEPTH,
+        "front_back_cut_width": front_back_cut_w,
+        "dado_depth": dado_depth,
+        "bottom_thickness": bottom_thickness,
         "inset_width": inset_w,
         "inset_height": inset_h,
         "min_depth_overlay": min_depth_overlay,
         "min_depth_inset": min_depth_inset,
-        "material_thickness": MATERIAL_THICKNESS,
+        "material_thickness": material_thickness,
+        "joint_type": joint_type,
         "slide_name": slide_cfg["name"]
     }
 
-def calculate_cabinet_opening(drawer_w: float, drawer_h: float, slide_len: float, slide_cfg: Dict[str, Any] = None) -> Dict[str, Any]:
+def calculate_cabinet_opening(
+    drawer_w: float, 
+    drawer_h: float, 
+    slide_len: float, 
+    slide_cfg: Dict[str, Any] = None,
+    material_thickness: float = 0.625,
+    joint_type: str = 'Butt Joint (Dominos / Dowels)',
+    bottom_thickness: float = 0.25,
+    dado_depth: float = 0.375
+) -> Dict[str, Any]:
     """
     Given target Drawer Box size and slide configuration, calculate required Cabinet Opening space.
     """
@@ -211,11 +245,13 @@ def calculate_cabinet_opening(drawer_w: float, drawer_h: float, slide_len: float
     min_depth_overlay = slide_len + min_depth_offset
     min_depth_inset = min_depth_overlay + INSET_FRONT_SETBACK
 
-    inside_w = drawer_w - (2 * MATERIAL_THICKNESS)
-    inside_d = slide_len - (2 * MATERIAL_THICKNESS)
+    inside_w = drawer_w - (2 * material_thickness)
+    inside_d = slide_len - (2 * material_thickness)
 
-    bottom_w = inside_w + (2 * DADO_DEPTH)
-    bottom_d = inside_d + (2 * DADO_DEPTH)
+    bottom_w = inside_w + (2 * dado_depth)
+    bottom_d = inside_d + (2 * dado_depth)
+
+    front_back_cut_w = get_front_back_cut_width(drawer_w, material_thickness, joint_type)
 
     inset_w = cabinet_w - (2 * REVEAL)
     inset_h = cabinet_h - (2 * REVEAL)
@@ -232,16 +268,25 @@ def calculate_cabinet_opening(drawer_w: float, drawer_h: float, slide_len: float
         "inside_depth": inside_d,
         "bottom_width": bottom_w,
         "bottom_depth": bottom_d,
-        "dado_depth": DADO_DEPTH,
+        "front_back_cut_width": front_back_cut_w,
+        "dado_depth": dado_depth,
+        "bottom_thickness": bottom_thickness,
         "inset_width": inset_w,
         "inset_height": inset_h,
         "min_depth_overlay": min_depth_overlay,
         "min_depth_inset": min_depth_inset,
-        "material_thickness": MATERIAL_THICKNESS,
+        "material_thickness": material_thickness,
+        "joint_type": joint_type,
         "slide_name": slide_cfg["name"]
     }
 
-def validate_inputs(width: float, height: float, slide_len: float, slide_cfg: Dict[str, Any] = None) -> List[str]:
+def validate_inputs(
+    width: float, 
+    height: float, 
+    slide_len: float, 
+    slide_cfg: Dict[str, Any] = None,
+    material_thickness: float = 0.625
+) -> List[str]:
     """
     Validate size inputs against slide specifications and return a list of warnings.
     """
@@ -252,6 +297,13 @@ def validate_inputs(width: float, height: float, slide_len: float, slide_cfg: Di
     if width <= 0 or height <= 0:
         warnings.append("Dimensions must be greater than zero.")
         return warnings
+
+    max_mat = slide_cfg.get("max_material_thickness", 0.625)
+    if max_mat and material_thickness > (max_mat + 0.001):
+        warnings.append(
+            f"Selected drawer wood thickness ({float_to_fraction(material_thickness)}) exceeds the maximum allowed thickness "
+            f"({float_to_fraction(max_mat)}) for {slide_cfg['name']} slides."
+        )
 
     min_drawer_w = slide_cfg["min_cab_width"] - slide_cfg["width_tolerance"]
     if width < slide_cfg["min_cab_width"]:
@@ -391,7 +443,7 @@ def generate_svg(data: Dict[str, Any], slide_cfg: Dict[str, Any] = None, project
         <text x="{cab_x + draw_cab_w - 90}" y="{cab_y + draw_cab_h - 20}" class="text-ins">Inset Front: {ins_w_p} x {ins_h_p}</text>
         
         <!-- Material Thickness label -->
-        <text x="{dr_x + draw_thick / 2}" y="{dr_y + 15}" class="text-thick" transform="rotate(-90, {dr_x + draw_thick / 2}, {dr_y + 15})">5/8"</text>
+        <text x="{dr_x + draw_thick / 2}" y="{dr_y + 15}" class="text-thick" transform="rotate(-90, {dr_x + draw_thick / 2}, {dr_y + 15})">{float_to_fraction(thick)}</text>
     </svg>"""
     
     return svg
@@ -421,8 +473,14 @@ def generate_csv_cutlist(results: Dict[str, Any], slide_cfg: Dict[str, Any] = No
     d_dr = results["drawer_depth"]
     in_w = results["inside_width"]
     in_d = results["inside_depth"]
-    bot_w = results.get("bottom_width", in_w + 0.5)
-    bot_d = results.get("bottom_depth", in_d + 0.5)
+    mat_thick = results.get("material_thickness", 0.625)
+    joint_type = results.get("joint_type", "Butt Joint (Dominos / Dowels)")
+    fb_cut_w = results.get("front_back_cut_width", in_w)
+
+    bot_w = results.get("bottom_width", in_w + 0.75)
+    bot_d = results.get("bottom_depth", in_d + 0.75)
+    bot_thick = results.get("bottom_thickness", 0.25)
+    dado_d = results.get("dado_depth", 0.375)
     w_ins = results["inset_width"]
     h_ins = results["inset_height"]
     min_dep_overlay = results.get("min_depth_overlay", d_dr + 0.65625)
@@ -441,6 +499,8 @@ def generate_csv_cutlist(results: Dict[str, Any], slide_cfg: Dict[str, Any] = No
     h_dr_p, h_dr_s = pair(h_dr)
     d_dr_p, d_dr_s = pair(d_dr)
 
+    fb_cut_p, fb_cut_s = pair(fb_cut_w)
+
     in_w_p, in_w_s = pair(in_w)
     in_d_p, in_d_s = pair(in_d)
 
@@ -452,9 +512,9 @@ def generate_csv_cutlist(results: Dict[str, Any], slide_cfg: Dict[str, Any] = No
 
     writer.writerow([project_name, "Cabinet Opening", 1, w_cab_p, w_cab_s, h_cab_p, h_cab_s, min_ov_p, min_ov_s, f"Min overlay depth: {min_ov_p} {min_ov_s}, Min inset depth: {min_in_p} {min_in_s}"])
     writer.writerow([project_name, "Drawer Box Outside", 1, w_dr_p, w_dr_s, h_dr_p, h_dr_s, d_dr_p, d_dr_s, "Total external drawer dimensions (Max suggested height)"])
-    writer.writerow([project_name, "Side Panels", 2, "-", "-", h_dr_p, h_dr_s, d_dr_p, d_dr_s, "Left and right outer drawer walls (Max suggested height)"])
-    writer.writerow([project_name, "Front & Back Panels", 2, in_w_p, in_w_s, h_dr_p, h_dr_s, "-", "-", "Fit between sides"])
-    writer.writerow([project_name, "Drawer Bottom Panel", 1, bot_w_p, bot_w_s, "-", "-", bot_d_p, bot_d_s, "Cut size including 1/4\" dado insertion on 4 sides"])
+    writer.writerow([project_name, "Side Panels", 2, "-", "-", h_dr_p, h_dr_s, d_dr_p, d_dr_s, f"Left and right outer drawer walls ({float_to_fraction(mat_thick)} thick)"])
+    writer.writerow([project_name, "Front & Back Panels", 2, fb_cut_p, fb_cut_s, h_dr_p, h_dr_s, "-", "-", f"Cut width for {joint_type} ({float_to_fraction(mat_thick)} thick)"])
+    writer.writerow([project_name, "Drawer Bottom Panel", 1, bot_w_p, bot_w_s, "-", "-", bot_d_p, bot_d_s, f"Cut size including {float_to_fraction(dado_d)} dado insertion on 4 sides ({float_to_fraction(bot_thick)} panel)"])
     writer.writerow([project_name, "Inside Workspace Clearance", 1, in_w_p, in_w_s, "-", "-", in_d_p, in_d_s, "Maximum flat interior workspace clearance"])
     writer.writerow([project_name, "Inset Front Reveal", 1, w_ins_p, w_ins_s, h_ins_p, h_ins_s, "-", "-", "Calculated with uniform 3/32\" reveal clearances"])
 
@@ -473,8 +533,14 @@ def generate_txt_summary(results: Dict[str, Any], slide_cfg: Dict[str, Any] = No
     d_dr = results["drawer_depth"]
     in_w = results["inside_width"]
     in_d = results["inside_depth"]
-    bot_w = results.get("bottom_width", in_w + 0.5)
-    bot_d = results.get("bottom_depth", in_d + 0.5)
+    mat_thick = results.get("material_thickness", 0.625)
+    joint_type = results.get("joint_type", "Butt Joint (Dominos / Dowels)")
+    fb_cut_w = results.get("front_back_cut_width", in_w)
+
+    bot_w = results.get("bottom_width", in_w + 0.75)
+    bot_d = results.get("bottom_depth", in_d + 0.75)
+    bot_thick = results.get("bottom_thickness", 0.25)
+    dado_d = results.get("dado_depth", 0.375)
     w_ins = results["inset_width"]
     h_ins = results["inset_height"]
 
@@ -508,6 +574,10 @@ Drawer Box Outside Depth:   {fmt(d_dr)}
 
 Inside Workspace Width:     {fmt(in_w)}
 Inside Workspace Depth:     {fmt(in_d)}
+Drawer Wood Thickness:      {fmt(mat_thick)}
+Box Joinery Type:           {joint_type}
+Bottom Panel Thickness:     {fmt(bot_thick)}
+Dado Groove Insertion:      {fmt(dado_d)}
 
 Inset Front Dimensions:     {fmt(w_ins)} x {fmt(h_ins)}
 
@@ -515,16 +585,16 @@ Inset Front Dimensions:     {fmt(w_ins)} x {fmt(h_ins)}
 1. Side Panels (Qty: 2)
    - Height: {fmt(h_dr)} [Max Suggested Height]
    - Length: {fmt(d_dr)}
-   - Material Thickness: 5/8" (15.9 mm)
+   - Material Thickness: {fmt(mat_thick)}
 
 2. Front & Back Panels (Qty: 2)
-   - Width:  {fmt(in_w)}
-   - Height: {fmt(h_dr)}
-   - Material Thickness: 5/8" (15.9 mm)
+   - Cut Width: {fmt(fb_cut_w)}  [{joint_type}]
+   - Height:    {fmt(h_dr)}
+   - Material Thickness: {fmt(mat_thick)}
 
-3. Drawer Bottom Panel Cut Size (Qty: 1) [Housed in 1/4" Dado Grooves]
-   - Cut Width: {fmt(bot_w)}  [Inside Width + 1/2" Dado Insertion]
-   - Cut Depth: {fmt(bot_d)}  [Inside Depth + 1/2" Dado Insertion]
+3. Drawer Bottom Panel Cut Size (Qty: 1) [Housed in {fmt(dado_d)} Dado Grooves ({fmt(bot_thick)} Panel)]
+   - Cut Width: {fmt(bot_w)}  [Inside Width + 2x {fmt(dado_d)} Dado Insertion]
+   - Cut Depth: {fmt(bot_d)}  [Inside Depth + 2x {fmt(dado_d)} Dado Insertion]
 
 4. Inside Workspace Clearance (Qty: 1)
    - Clear Width: {fmt(in_w)}

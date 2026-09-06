@@ -128,6 +128,10 @@ with col1:
                             <span class="metric-label">Min. Cab Width:</span>
                             <strong>{fmt_pair(slide['min_cab_width'])}</strong>
                         </div>
+                        <div class="metric-item">
+                            <span class="metric-label">Max Wood Thickness:</span>
+                            <strong>{fmt_pair(slide.get('max_material_thickness', 0.625))}</strong>
+                        </div>
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
@@ -160,7 +164,11 @@ with col2:
             ext_below = render_dimension_input("Extension Below", key="new_slide_ext_below", default_val=0.21875, min_val=0.0, max_val=1.0, help_text="Extension of drawer side walls below bottom.", sidebar=False, unit_system=unit_system)
             min_w = render_dimension_input("Min Opening Width", key="new_slide_min_w", default_val=6.0, min_val=1.0, max_val=24.0, help_text="Minimum cabinet opening width.", sidebar=False, unit_system=unit_system)
             
-        min_h = render_dimension_input("Min Opening Height", key="new_slide_min_h", default_val=3.5, min_val=1.0, max_val=24.0, help_text="Minimum cabinet opening height.", sidebar=False, unit_system=unit_system)
+        c3, c4 = st.columns(2)
+        with c3:
+            min_h = render_dimension_input("Min Opening Height", key="new_slide_min_h", default_val=3.5, min_val=1.0, max_val=24.0, help_text="Minimum cabinet opening height.", sidebar=False, unit_system=unit_system)
+        with c4:
+            max_mat = render_dimension_input("Max Wood Thickness", key="new_slide_max_mat", default_val=0.625, min_val=0.25, max_val=1.5, help_text="Maximum rated drawer wood thickness.", sidebar=False, unit_system=unit_system)
         
         submit = st.form_submit_button("Add Profile", type="primary")
         
@@ -178,7 +186,8 @@ with col2:
                     bottom_recess=recess,
                     extension_below=ext_below,
                     min_cab_width=min_w,
-                    min_cab_height=min_h
+                    min_cab_height=min_h,
+                    max_material_thickness=max_mat
                 )
                 if saved:
                     st.success(f"Added slide profile '{name.strip()}' successfully!")

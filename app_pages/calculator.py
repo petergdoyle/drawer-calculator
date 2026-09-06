@@ -148,14 +148,14 @@ if "slide_len" not in st.session_state:
     st.session_state.slide_len = 21.0
 if "slide_type" not in st.session_state:
     st.session_state.slide_type = 'Blum Tandem (5/8" Wood)'
-
-# Project / Configuration Name input
-proj_name = st.sidebar.text_input(
-    "Project / Drawer Name",
-    key="project_name",
-    help="Name your project to label exported reports and saved setups.",
-    placeholder="e.g., Kitchen Base Drawer 1"
-)
+if "material_thickness" not in st.session_state:
+    st.session_state.material_thickness = 0.625
+if "joint_type" not in st.session_state:
+    st.session_state.joint_type = 'Butt Joint (Dominos / Dowels)'
+if "bottom_thickness" not in st.session_state:
+    st.session_state.bottom_thickness = 0.25
+if "dado_depth" not in st.session_state:
+    st.session_state.dado_depth = 0.375
 
 # Fetch slides from database
 active_slides = list_slides()
@@ -165,21 +165,243 @@ if st.session_state.slide_type not in slide_names:
     if slide_names:
         st.session_state.slide_type = slide_names[0]
 
+# Snapshot helper for tracking unsaved modifications
+def get_current_snapshot():
+    return {
+        'name': st.session_state.get('project_name', 'Drawer Box Project'),
+        'mode': st.session_state.get('mode_selector', 'Drawer Box Mode'),
+        'cab_w': float(st.session_state.get('cab_w', 20.0)),
+        'cab_h': float(st.session_state.get('cab_h', 6.0)),
+        'dr_w': float(st.session_state.get('dr_w', 19.625)),
+        'dr_h': float(st.session_state.get('dr_h', 5.0)),
+        'slide_len': float(st.session_state.get('slide_len', 21.0)),
+        'slide_type': st.session_state.get('slide_type', slide_names[0] if slide_names else ''),
+        'material_thickness': float(st.session_state.get('material_thickness', 0.625)),
+        'joint_type': st.session_state.get('joint_type', 'Butt Joint (Dominos / Dowels)'),
+        'bottom_thickness': float(st.session_state.get('bottom_thickness', 0.25)),
+        'dado_depth': float(st.session_state.get('dado_depth', 0.375))
+    }
+
+if "saved_snapshot" not in st.session_state:
+    st.session_state.saved_snapshot = get_current_snapshot()
+
+def reset_to_new_project():
+    st.session_state["project_name"] = "New Drawer Project"
+    st.session_state["setup_name_input"] = "New Drawer Project"
+    st.session_state["mode_selector"] = "Drawer Box Mode"
+    st.session_state["cab_w"] = 20.0
+    st.session_state["cab_h"] = 6.0
+    st.session_state["cab_w_text"] = "20"
+    st.session_state["cab_h_text"] = "6"
+    st.session_state["dr_w"] = 19.625
+    st.session_state["dr_h"] = 5.0
+    st.session_state["dr_w_text"] = "19 5/8"
+    st.session_state["dr_h_text"] = "5"
+    st.session_state["slide_len"] = 21.0
+    if slide_names:
+        st.session_state["slide_type"] = slide_names[0]
+    st.session_state["material_thickness"] = 0.625
+    st.session_state["material_thickness_text"] = "5/8"
+    st.session_state["joint_type"] = 'Butt Joint (Dominos / Dowels)'
+    st.session_state["bottom_thickness"] = 0.25
+    st.session_state["bottom_thickness_text"] = "1/4"
+    st.session_state["dado_depth"] = 0.375
+    st.session_state["dado_depth_text"] = "3/8"
+    st.session_state["pending_action"] = None
+    st.session_state.saved_snapshot = get_current_snapshot()
+
+def handle_save_setup_callback():
+    name_to_save = st.session_state.get("setup_name_input", "").strip()
+    if not name_to_save:
+        st.session_state["save_error_msg"] = "Please enter a valid configuration name."
+        st.session_state["save_success_msg"] = None
+        return
+    
+    current_mode = st.session_state.get("mode_selector", "Drawer Box Mode")
+    mode_str = "drawer_box_mode" if current_mode == "Drawer Box Mode" else "carcass_mode"
+    
+    b_thick = float(st.session_state.get("bottom_thickness", 0.25))
+    d_depth = float(st.session_state.get("dado_depth", 0.375))
+    
+    saved = save_setup(
+        name=name_to_save,
+        mode=mode_str,
+        cabinet_w=float(st.session_state.get("cab_w", 20.0)),
+        cabinet_h=float(st.session_state.get("cab_h", 6.0)),
+        drawer_w=float(st.session_state.get("dr_w", 19.625)),
+        drawer_h=float(st.session_state.get("dr_h", 5.0)),
+        slide_len=float(st.session_state.get("slide_len", 21.0)),
+        slide_name=st.session_state.get("slide_type", "Blum Tandem (5/8\" Wood)"),
+        material_thickness=float(st.session_state.get("material_thickness", 0.625)),
+        joint_type=st.session_state.get("joint_type", "Butt Joint (Dominos / Dowels)"),
+        bottom_thickness=b_thick,
+        dado_depth=d_depth
+    )
+    
+    if saved:
+        st.session_state["project_name"] = name_to_save
+        st.session_state["setup_name_input"] = name_to_save
+        st.session_state["pending_action"] = None
+        st.session_state["save_success_msg"] = f"Saved configuration: '{name_to_save}'"
+        st.session_state["save_error_msg"] = None
+        st.session_state.saved_snapshot = {
+            'name': name_to_save,
+            'mode': current_mode,
+            'cab_w': float(st.session_state.get('cab_w', 20.0)),
+            'cab_h': float(st.session_state.get('cab_h', 6.0)),
+            'dr_w': float(st.session_state.get('dr_w', 19.625)),
+            'dr_h': float(st.session_state.get('dr_h', 5.0)),
+            'slide_len': float(st.session_state.get('slide_len', 21.0)),
+            'slide_type': st.session_state.get('slide_type', ''),
+            'material_thickness': float(st.session_state.get('material_thickness', 0.625)),
+            'joint_type': st.session_state.get('joint_type', ''),
+            'bottom_thickness': b_thick,
+            'dado_depth': d_depth
+        }
+    else:
+        st.session_state["save_error_msg"] = f"Failed to save configuration '{name_to_save}'. A configuration with this name may already exist."
+        st.session_state["save_success_msg"] = None
+
+def load_setup_callback(setup_item):
+    st.session_state["project_name"] = setup_item['name']
+    st.session_state["setup_name_input"] = setup_item['name']
+    if setup_item['mode'] == 'drawer_box_mode':
+        st.session_state["mode_selector"] = "Drawer Box Mode"
+        st.session_state["cab_w"] = setup_item['cabinet_width']
+        st.session_state["cab_h"] = setup_item['cabinet_height']
+        st.session_state["cab_w_text"] = float_to_fraction(setup_item['cabinet_width']).replace('"', '')
+        st.session_state["cab_h_text"] = float_to_fraction(setup_item['cabinet_height']).replace('"', '')
+    else:
+        st.session_state["mode_selector"] = "Carcass Mode"
+        st.session_state["dr_w"] = setup_item['drawer_width']
+        st.session_state["dr_h"] = setup_item['drawer_height']
+        st.session_state["dr_w_text"] = float_to_fraction(setup_item['drawer_width']).replace('"', '')
+        st.session_state["dr_h_text"] = float_to_fraction(setup_item['drawer_height']).replace('"', '')
+    
+    st.session_state["slide_len"] = float(setup_item['slide_length'])
+    st.session_state["slide_type"] = setup_item.get('slide_name', 'Blum Tandem (5/8" Wood)')
+    
+    m_thick = float(setup_item.get('material_thickness', 0.625))
+    st.session_state["material_thickness"] = m_thick
+    st.session_state["material_thickness_text"] = float_to_fraction(m_thick).replace('"', '')
+    st.session_state["joint_type"] = setup_item.get('joint_type', 'Butt Joint (Dominos / Dowels)')
+    
+    b_thick = float(setup_item.get('bottom_thickness', 0.25))
+    st.session_state["bottom_thickness"] = b_thick
+    st.session_state["bottom_thickness_text"] = float_to_fraction(b_thick).replace('"', '')
+    
+    d_depth = float(setup_item.get('dado_depth', 0.375))
+    st.session_state["dado_depth"] = d_depth
+    st.session_state["dado_depth_text"] = float_to_fraction(d_depth).replace('"', '')
+    
+    st.session_state["pending_action"] = None
+    st.session_state.saved_snapshot = {
+        'name': setup_item['name'],
+        'mode': 'Drawer Box Mode' if setup_item['mode'] == 'drawer_box_mode' else 'Carcass Mode',
+        'cab_w': float(setup_item['cabinet_width']),
+        'cab_h': float(setup_item['cabinet_height']),
+        'dr_w': float(setup_item['drawer_width']),
+        'dr_h': float(setup_item['drawer_height']),
+        'slide_len': float(setup_item['slide_length']),
+        'slide_type': setup_item.get('slide_name', 'Blum Tandem (5/8" Wood)'),
+        'material_thickness': m_thick,
+        'joint_type': setup_item.get('joint_type', 'Butt Joint (Dominos / Dowels)'),
+        'bottom_thickness': b_thick,
+        'dado_depth': d_depth
+    }
+
+def delete_setup_callback(setup_id):
+    delete_setup(setup_id)
+
+# New Project Button at top of sidebar
+if st.sidebar.button("➕ Create New Project", type="primary", use_container_width=True):
+    current_snap = get_current_snapshot()
+    if current_snap != st.session_state.saved_snapshot:
+        st.session_state["pending_action"] = "new_project"
+    else:
+        reset_to_new_project()
+
+# Project / Configuration Name input
+proj_name = st.sidebar.text_input(
+    "Project / Drawer Name",
+    key="project_name",
+    help="Unique label for this project configuration. Used in titles, exported reports (.txt, .csv, .svg), and database setups.",
+    placeholder="e.g., Kitchen Base Drawer 1"
+)
+
 # Hardware slide profile selection
 st.sidebar.subheader("Hardware Profile")
 slide_name = st.sidebar.selectbox(
     "Slide Type",
     options=slide_names,
-    key="slide_type"
+    key="slide_type",
+    help="Select hardware slide profile (e.g. Blum Tandem 563H for 5/8\" wood, 569 for 3/4\" wood, or custom runner). Determines side & height clearance tolerances and maximum wood thickness ratings."
 )
 
 selected_slide_cfg = next((s for s in active_slides if s["name"] == slide_name), None)
+
+# Drawer Material & Joinery Specs
+st.sidebar.subheader("Drawer Material Specs")
+mat_thick = render_dimension_input(
+    "Drawer Wood Thickness",
+    key="material_thickness",
+    default_val=0.625,
+    min_val=0.25,
+    max_val=1.5,
+    help_text="Thickness of side, front, and back drawer box wood walls (e.g., 5/8\", 1/2\", 3/4\", 15 mm). Validated against slide runner maximum thickness.",
+    sidebar=True,
+    unit_system=unit_system
+)
+
+joint_options = [
+    "Butt Joint (Dominos / Dowels)",
+    "Butt Joint (Pocket Holes)",
+    "Butt Joint (Screws / Dowels)",
+    "Miter Joint",
+    "Dovetail Joint",
+    "Box Joint",
+    "Dado Butt Joint"
+]
+if st.session_state.joint_type not in joint_options:
+    st.session_state.joint_type = joint_options[0]
+
+joint_type = st.sidebar.selectbox(
+    "Box Joinery Type",
+    options=joint_options,
+    key="joint_type",
+    help="Corner joinery method. Butt joints subtract 2x material thickness for front/back panels; Miter, Dovetail, and Box joints cut front/back panels to full exterior drawer width."
+)
+
+# Bottom Panel Specs
+st.sidebar.subheader("Bottom Panel Specs")
+bot_thick = render_dimension_input(
+    "Bottom Panel Thickness",
+    key="bottom_thickness",
+    default_val=0.25,
+    min_val=0.125,
+    max_val=0.75,
+    help_text="Thickness of drawer bottom panel board (e.g., 1/4\", 3/8\", 1/2\", 6 mm).",
+    sidebar=True,
+    unit_system=unit_system
+)
+
+dado_d = render_dimension_input(
+    "Dado Groove Depth",
+    key="dado_depth",
+    default_val=0.375,
+    min_val=0.125,
+    max_val=0.75,
+    help_text="Insertion depth of groove cut into drawer sides, front, and back (default 3/8\" on 4 sides, adds 3/4\" total to interior width & depth for bottom cut size).",
+    sidebar=True,
+    unit_system=unit_system
+)
 
 # Sidebar calculation mode selector
 mode = st.sidebar.selectbox(
     "Calculation Mode", 
     ["Drawer Box Mode", "Carcass Mode"], 
-    key="mode_selector"
+    key="mode_selector",
+    help="Select calculation direction:\n• Drawer Box Mode: Calculate recommended drawer box size from cabinet cavity opening.\n• Carcass Mode: Calculate required cabinet cavity opening from target drawer box size."
 )
 
 # Render inputs reactive to chosen mode
@@ -191,6 +413,7 @@ if mode == "Drawer Box Mode":
         default_val=20.0,
         min_val=1.0, 
         max_val=120.0, 
+        help_text="Clear internal opening width of the cabinet cavity between side walls (e.g., 20\", 20 1/2\", 508 mm).",
         sidebar=True,
         unit_system=unit_system
     )
@@ -200,18 +423,24 @@ if mode == "Drawer Box Mode":
         default_val=6.0,
         min_val=1.0, 
         max_val=120.0, 
+        help_text="Clear internal opening height of the cabinet cavity or face frame (e.g., 6\", 6 1/4\", 152 mm).",
         sidebar=True,
         unit_system=unit_system
     )
     slide_len = st.sidebar.selectbox(
         "Slide Nominal Length (in)", 
         options=STANDARD_SLIDES, 
-        key="slide_len"
+        key="slide_len",
+        help="Standard nominal runner length (e.g., 9\", 12\", 15\", 18\", 21\", 24\", 27\", 30\"). Determines drawer box depth and minimum carcass depth."
     )
     
     # Run calculation
-    results = calculate_drawer_box(cab_w, cab_h, slide_len, selected_slide_cfg)
-    warnings = validate_inputs(cab_w, cab_h, slide_len, selected_slide_cfg)
+    results = calculate_drawer_box(
+        cab_w, cab_h, slide_len, selected_slide_cfg,
+        material_thickness=mat_thick, joint_type=joint_type,
+        bottom_thickness=bot_thick, dado_depth=dado_d
+    )
+    warnings = validate_inputs(cab_w, cab_h, slide_len, selected_slide_cfg, material_thickness=mat_thick)
 
 else:  # Carcass Mode
     st.sidebar.subheader("Target Drawer Inputs")
@@ -221,6 +450,7 @@ else:  # Carcass Mode
         default_val=19.625,
         min_val=1.0, 
         max_val=120.0, 
+        help_text="Target exterior width of assembled drawer box (e.g., 19 5/8\", 19.625\", 500 mm).",
         sidebar=True,
         unit_system=unit_system
     )
@@ -230,24 +460,49 @@ else:  # Carcass Mode
         default_val=5.0,
         min_val=1.0, 
         max_val=120.0, 
+        help_text="Target exterior height of drawer box side walls (e.g., 5\", 5.25\", 130 mm).",
         sidebar=True,
         unit_system=unit_system
     )
     slide_len = st.sidebar.selectbox(
         "Slide Nominal Length (in)", 
         options=STANDARD_SLIDES, 
-        key="slide_len"
+        key="slide_len",
+        help="Standard nominal runner length (e.g., 9\", 12\", 15\", 18\", 21\", 24\", 27\", 30\"). Determines drawer box depth and minimum carcass depth."
     )
     
     # Run calculation
-    results = calculate_cabinet_opening(dr_w, dr_h, slide_len, selected_slide_cfg)
+    results = calculate_cabinet_opening(
+        dr_w, dr_h, slide_len, selected_slide_cfg,
+        material_thickness=mat_thick, joint_type=joint_type,
+        bottom_thickness=bot_thick, dado_depth=dado_d
+    )
     # Validate calculated cabinet sizes
-    warnings = validate_inputs(results["cabinet_width"], results["cabinet_height"], slide_len, selected_slide_cfg)
+    warnings = validate_inputs(results["cabinet_width"], results["cabinet_height"], slide_len, selected_slide_cfg, material_thickness=mat_thick)
+
+# Check dirty state after all inputs rendered
+current_snap = get_current_snapshot()
+is_dirty = (current_snap != st.session_state.saved_snapshot)
 
 # ----------------- MAIN LAYOUT -----------------
 
 st.markdown('<div class="app-title">📐 Drawer Calculator</div>', unsafe_allow_html=True)
 st.markdown(f'<div class="app-subtitle">Homelab tool dynamically configured for <strong>{slide_name}</strong> undermount drawer slides. Active Unit: <strong>{unit_system}</strong>.</div>', unsafe_allow_html=True)
+
+# Prompt for confirmation if user requested new project with unsaved changes
+if st.session_state.get("pending_action") == "new_project":
+    st.warning(f"⚠️ **Unsaved Changes Warning**: You have modified parameters in project **'{st.session_state.project_name}'**. Would you like to save your changes first?")
+    confirm_col1, confirm_col2, confirm_col3 = st.columns(3)
+    with confirm_col1:
+        if st.button("🗑️ Discard & Create New", type="primary"):
+            reset_to_new_project()
+    with confirm_col2:
+        if st.button("❌ Keep Editing"):
+            st.session_state["pending_action"] = None
+            st.rerun()
+
+elif is_dirty:
+    st.info(f"✏️ **Unsaved Changes**: You have modified parameters in **'{st.session_state.project_name}'**. Don't forget to save your project in Setup Management!")
 
 # Split page into main content (Left) and persistence column (Right)
 main_col, db_col = st.columns([7, 3])
@@ -298,7 +553,7 @@ with main_col:
     with st.expander("🖼️ View Interactive 2D Cavity Overlay & Clearance Map", expanded=True):
         svg_code = generate_svg(results, selected_slide_cfg, project_name=proj_name, unit_system=unit_system)
         st.components.v1.html(svg_code, height=520, scrolling=False)
-        st.caption(f"Figure: Wireframe diagram for '{proj_name}' showcasing Cabinet Cavity Opening (Dashed Blue), Inset Front Profile (Dashed Green), and Max Drawer Box Height clearance (Amber) with 5/8\" walls.")
+        st.caption(f"Figure: Wireframe diagram for '{proj_name}' showcasing Cabinet Cavity Opening (Dashed Blue), Inset Front Profile (Dashed Green), and Max Drawer Box Height clearance (Amber) with {float_to_fraction(mat_thick)} walls.")
 
     # 4. Copyable Markdown Summary Card
     st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
@@ -315,8 +570,9 @@ with main_col:
     
     in_w = results["inside_width"]
     in_d = results["inside_depth"]
-    bot_w = results.get("bottom_width", in_w + 0.5)
-    bot_d = results.get("bottom_depth", in_d + 0.5)
+    fb_cut_w = results.get("front_back_cut_width", in_w)
+    bot_w = results.get("bottom_width", in_w + 2 * dado_d)
+    bot_d = results.get("bottom_depth", in_d + 2 * dado_d)
 
     def pair_str(v):
         p, s = format_dimension_pair(v, unit_system)
@@ -331,8 +587,12 @@ with main_col:
     h_ins_p, h_ins_s = pair_str(h_ins)
     in_w_p, in_w_s = pair_str(in_w)
     in_d_p, in_d_s = pair_str(in_d)
+    fb_cut_p, fb_cut_s = pair_str(fb_cut_w)
     bot_w_p, bot_w_s = pair_str(bot_w)
     bot_d_p, bot_d_s = pair_str(bot_d)
+    mat_thick_p, mat_thick_s = pair_str(mat_thick)
+    bot_thick_p, bot_thick_s = pair_str(bot_thick)
+    dado_d_p, dado_d_s = pair_str(dado_d)
 
     min_dep_overlay = results.get("min_depth_overlay", d_dr + 0.65625)
     min_dep_inset = results.get("min_depth_inset", min_dep_overlay + 0.75)
@@ -347,9 +607,9 @@ with main_col:
 | :--- | :--- | :--- | :--- | :--- |
 | **Cabinet Opening** | {w_cab_p} &times; {h_cab_p} | {w_cab_s} &times; {h_cab_s} | 1 | Opening space. Min depth: {min_ov_p} {min_ov_s} Overlay / {min_in_p} {min_in_s} Inset |
 | **Drawer Box Outside** | {w_dr_p} &times; {h_dr_p} &times; {d_dr_p} | {w_dr_s} &times; {h_dr_s} &times; {d_dr_s} | 1 | Total external drawer dimensions (Max suggested height: {h_dr_p}). |
-| **Side Panels** | {d_dr_p} &times; {h_dr_p} | {d_dr_s} &times; {h_dr_s} | 2 | Left and right outer drawer walls (Max suggested height: {h_dr_p}). |
-| **Front & Back Panels** | {in_w_p} &times; {h_dr_p} | {in_w_s} &times; {h_dr_s} | 2 | Fit between sides. (Calculated width: Outside Width - 1.25"). |
-| **Drawer Bottom Panel** | {bot_w_p} &times; {bot_d_p} | {bot_w_s} &times; {bot_d_s} | 1 | Housed in 1/4" dado grooves (Includes 1/2" total insertion depth). |
+| **Side Panels** | {d_dr_p} &times; {h_dr_p} | {d_dr_s} &times; {h_dr_s} | 2 | Left and right outer drawer walls ({mat_thick_p} thick). |
+| **Front & Back Panels** | {fb_cut_p} &times; {h_dr_p} | {fb_cut_s} &times; {h_dr_s} | 2 | Cut width for {joint_type} ({mat_thick_p} thick). |
+| **Drawer Bottom Panel** | {bot_w_p} &times; {bot_d_p} | {bot_w_s} &times; {bot_d_s} | 1 | Cut size for {bot_thick_p} panel housed in {dado_d_p} dado grooves on 4 sides. |
 | **Inside Volume Space** | {in_w_p} &times; {in_d_p} | {in_w_s} &times; {in_d_s} | 1 | Maximum interior flat workspace clearance. |
 | **Inset Front Reveal** | {w_ins_p} &times; {h_ins_p} | {w_ins_s} &times; {h_ins_s} | 1 | Calculated with uniform 3/32" reveal clearances. |
 """
@@ -400,55 +660,24 @@ with main_col:
 
 with db_col:
     st.subheader("💾 Setup Management")
-    
+    st.button("➕ New Project", key="btn_new_project_main", on_click=reset_to_new_project if not is_dirty else None)
+    if is_dirty and st.session_state.get("btn_new_project_main"):
+        st.session_state["pending_action"] = "new_project"
+        st.rerun()
+
     # Form to save current setup
     with st.form("save_setup_form", clear_on_submit=False):
         st.write("Save Current Layout")
-        setup_name = st.text_input("Configuration Name", value=proj_name, placeholder="e.g., Kitchen Base Drawer 1")
-        submit_save = st.form_submit_button("Save Configuration")
-        
-        if submit_save:
-            if not setup_name.strip():
-                st.error("Please enter a valid configuration name.")
-            else:
-                saved = save_setup(
-                    name=setup_name.strip(),
-                    mode=results["mode"],
-                    cabinet_w=results["cabinet_width"],
-                    cabinet_h=results["cabinet_height"],
-                    drawer_w=results["drawer_width"],
-                    drawer_h=results["drawer_height"],
-                    slide_len=results["drawer_depth"],
-                    slide_name=slide_name
-                )
-                if saved:
-                    st.session_state["project_name"] = setup_name.strip()
-                    st.success(f"Saved configuration: '{setup_name.strip()}'")
-                    st.rerun()
-                else:
-                    st.error("Failed to save configuration. A configuration with this name may already exist.")
-                    
-    # Callbacks for loading and deleting setups
-    def load_setup_callback(setup_item):
-        st.session_state["project_name"] = setup_item['name']
-        if setup_item['mode'] == 'drawer_box_mode':
-            st.session_state["mode_selector"] = "Drawer Box Mode"
-            st.session_state["cab_w"] = setup_item['cabinet_width']
-            st.session_state["cab_h"] = setup_item['cabinet_height']
-            st.session_state["cab_w_text"] = float_to_fraction(setup_item['cabinet_width']).replace('"', '')
-            st.session_state["cab_h_text"] = float_to_fraction(setup_item['cabinet_height']).replace('"', '')
-        else:
-            st.session_state["mode_selector"] = "Carcass Mode"
-            st.session_state["dr_w"] = setup_item['drawer_width']
-            st.session_state["dr_h"] = setup_item['drawer_height']
-            st.session_state["dr_w_text"] = float_to_fraction(setup_item['drawer_width']).replace('"', '')
-            st.session_state["dr_h_text"] = float_to_fraction(setup_item['drawer_height']).replace('"', '')
-        
-        st.session_state["slide_len"] = float(setup_item['slide_length'])
-        st.session_state["slide_type"] = setup_item.get('slide_name', 'Blum Tandem (5/8" Wood)')
+        st.text_input("Configuration Name", value=proj_name, key="setup_name_input", placeholder="e.g., Kitchen Base Drawer 1")
+        st.form_submit_button("Save Configuration", on_click=handle_save_setup_callback, type="primary")
 
-    def delete_setup_callback(setup_id):
-        delete_setup(setup_id)
+    if st.session_state.get("save_success_msg"):
+        st.success(st.session_state["save_success_msg"])
+        st.session_state["save_success_msg"] = None
+
+    if st.session_state.get("save_error_msg"):
+        st.error(st.session_state["save_error_msg"])
+        st.session_state["save_error_msg"] = None
 
     # List and Load saved configurations
     st.write("Saved Projects")
@@ -459,6 +688,10 @@ with db_col:
     else:
         for item in saved_setups:
             saved_slide_name = item.get('slide_name', 'Blum Tandem (5/8" Wood)')
+            saved_mat = float(item.get('material_thickness', 0.625))
+            saved_joint = item.get('joint_type', 'Butt Joint (Dominos / Dowels)')
+            saved_bot = float(item.get('bottom_thickness', 0.25))
+            saved_dado = float(item.get('dado_depth', 0.375))
             with st.container():
                 st.markdown(f"""
                 <div style="border: 1px solid #2d2d30; padding: 0.75rem; border-radius: 8px; margin-bottom: 0.5rem; background-color: #121214;">
@@ -467,6 +700,8 @@ with db_col:
                         Mode: {'Box' if item['mode'] == 'drawer_box_mode' else 'Carcass'} | 
                         Slide: {int(item['slide_length'])}\" | 
                         Profile: {saved_slide_name}<br>
+                        Wood: {float_to_fraction(saved_mat)} | Joint: {saved_joint}<br>
+                        Bottom: {float_to_fraction(saved_bot)} ({float_to_fraction(saved_dado)} dado)<br>
                         Cab: {float_to_fraction(item['cabinet_width'])} x {float_to_fraction(item['cabinet_height'])}
                     </div>
                 </div>

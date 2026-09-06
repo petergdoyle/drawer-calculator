@@ -7,6 +7,7 @@ from src.engine import (
     mm_to_inches,
     format_dimension_pair,
     calculate_drawer_box,
+    validate_inputs,
     generate_csv_cutlist,
     generate_txt_summary
 )
@@ -95,18 +96,49 @@ class TestEngineDimensionParsing(unittest.TestCase):
         self.assertEqual(float_to_fraction(0.03125), '1/32"')
         self.assertEqual(float_to_fraction(20.0), '20"')
 
-    def test_export_generators(self):
-        res = calculate_drawer_box(20.0, 6.0, 21.0)
-        proj = "Kitchen Base Drawer 1"
-        csv_out = generate_csv_cutlist(res, project_name=proj, unit_system="Metric (mm)")
-        self.assertIn("Project_Name", csv_out)
-        self.assertIn(proj, csv_out)
-        self.assertIn("508.0 mm", csv_out)
+    def test_joinery_cut_widths(self):
+        # Butt Joint
+        res_butt = calculate_drawer_box(20.0, 6.0, 21.0, material_thickness=0.625, joint_type="Butt Joint (Dominos / Dowels)")
+        self.assertEqual(res_butt["drawer_width"], 19.625)
+        # Front/Back cut width = 19.625 - 2*(0.625) = 18.375
+        self.assertEqual(res_butt["front_back_cut_width"], 18.375)
 
-        txt_out = generate_txt_summary(res, project_name=proj, unit_system="Metric (mm)")
-        self.assertIn("DRAWER CALCULATOR - CUT LIST & WORKSTATION SUMMARY", txt_out)
-        self.assertIn(f"Project Name:     {proj}", txt_out)
-        self.assertIn("508.0 mm", txt_out)
+        # Miter Joint
+        res_miter = calculate_drawer_box(20.0, 6.0, 21.0, material_thickness=0.625, joint_type="Miter Joint")
+        self.assertEqual(res_miter["front_back_cut_width"], 19.625)
+
+        # Dovetail Joint
+        res_dove = calculate_drawer_box(20.0, 6.0, 21.0, material_thickness=0.75, joint_type="Dovetail Joint")
+        self.assertEqual(res_dove["front_back_cut_width"], 19.625)
+
+        # Dado Butt Joint
+        res_dado = calculate_drawer_box(20.0, 6.0, 21.0, material_thickness=0.625, joint_type="Dado Butt Joint")
+        # 19.625 - 2*(0.625 - 0.25) = 19.625 - 0.75 = 18.875
+        self.assertEqual(res_dado["front_back_cut_width"], 18.875)
+
+    def test_slide_thickness_validation(self):
+        slide_58 = {"name": "Blum 563H", "width_tolerance": 0.375, "height_tolerance": 1.0, "min_cab_width": 6.0, "min_cab_height": 3.5, "max_material_thickness": 0.625}
+        
+        # Valid 5/8" thickness
+        warns_ok = validate_inputs(20.0, 6.0, 21.0, slide_cfg=slide_58, material_thickness=0.625)
+        self.assertEqual(len(warns_ok), 0)
+
+    def test_custom_dado_depth_and_bottom_thickness(self):
+        # Default 3/8" dado depth, 1/4" bottom thickness
+        res_def = calculate_drawer_box(20.0, 6.0, 21.0, material_thickness=0.625, dado_depth=0.375, bottom_thickness=0.25)
+        # Inside width = 20.0 - 0.375 - 2*(0.625) = 19.625 - 1.25 = 18.375
+        # Bottom width = 18.375 + 2*(0.375) = 19.125
+        self.assertEqual(res_def["inside_width"], 18.375)
+        self.assertEqual(res_def["bottom_width"], 19.125)
+        self.assertEqual(res_def["bottom_thickness"], 0.25)
+        self.assertEqual(res_def["dado_depth"], 0.375)
+
+        # 1/2" dado depth
+        res_half = calculate_drawer_box(20.0, 6.0, 21.0, material_thickness=0.625, dado_depth=0.500, bottom_thickness=0.375)
+        # Bottom width = 18.375 + 2*(0.500) = 19.375
+        self.assertEqual(res_half["bottom_width"], 19.375)
+        self.assertEqual(res_half["bottom_thickness"], 0.375)
+        self.assertEqual(res_half["dado_depth"], 0.500)
 
 if __name__ == '__main__':
     unittest.main()

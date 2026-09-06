@@ -29,11 +29,19 @@ def init_db() -> None:
             )
         """)
         
-        # Check if slide_name column exists, if not add it (backward compatibility migration)
+        # Check if migrations are needed on drawer_setups
         cursor.execute("PRAGMA table_info(drawer_setups)")
         columns = [row[1] for row in cursor.fetchall()]
         if 'slide_name' not in columns:
             cursor.execute("ALTER TABLE drawer_setups ADD COLUMN slide_name TEXT DEFAULT 'Blum Tandem (5/8\" Wood)'")
+        if 'material_thickness' not in columns:
+            cursor.execute("ALTER TABLE drawer_setups ADD COLUMN material_thickness REAL DEFAULT 0.625")
+        if 'joint_type' not in columns:
+            cursor.execute("ALTER TABLE drawer_setups ADD COLUMN joint_type TEXT DEFAULT 'Butt Joint (Dominos / Dowels)'")
+        if 'bottom_thickness' not in columns:
+            cursor.execute("ALTER TABLE drawer_setups ADD COLUMN bottom_thickness REAL DEFAULT 0.25")
+        if 'dado_depth' not in columns:
+            cursor.execute("ALTER TABLE drawer_setups ADD COLUMN dado_depth REAL DEFAULT 0.375")
 
         # Create slides table
         cursor.execute("""
@@ -47,24 +55,34 @@ def init_db() -> None:
                 extension_below REAL NOT NULL,
                 min_cab_width REAL NOT NULL,
                 min_cab_height REAL NOT NULL,
+                max_material_thickness REAL DEFAULT 0.625,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
         
+        cursor.execute("PRAGMA table_info(slides)")
+        slide_cols = [row[1] for row in cursor.fetchall()]
+        if 'max_material_thickness' not in slide_cols:
+            cursor.execute("ALTER TABLE slides ADD COLUMN max_material_thickness REAL DEFAULT 0.625")
+
         # Prepopulate default slides if table is empty
         cursor.execute("SELECT COUNT(*) FROM slides")
         if cursor.fetchone()[0] == 0:
             cursor.execute("""
                 INSERT INTO slides 
-                (name, width_tolerance, height_tolerance, min_depth_offset, bottom_recess, extension_below, min_cab_width, min_cab_height)
+                (name, width_tolerance, height_tolerance, min_depth_offset, bottom_recess, extension_below, min_cab_width, min_cab_height, max_material_thickness)
                 VALUES 
-                ('Blum Tandem (5/8" Wood)', 0.375, 1.0, 0.65625, 0.5, 0.21875, 6.0, 3.5),
-                ('Blum Tandem (1/2" Wood)', 0.625, 1.0, 0.65625, 0.5, 0.21875, 6.0, 3.5),
-                ('Generic Undermount', 0.375, 1.0, 0.65625, 0.5, 0.21875, 6.0, 3.5)
+                ('Blum Tandem (5/8" Wood)', 0.375, 1.0, 0.65625, 0.5, 0.21875, 6.0, 3.5, 0.625),
+                ('Blum Tandem (1/2" Wood)', 0.625, 1.0, 0.65625, 0.5, 0.21875, 6.0, 3.5, 0.500),
+                ('Blum Tandem (3/4" Wood)', 0.375, 1.0, 0.65625, 0.5, 0.21875, 6.0, 3.5, 0.750),
+                ('Generic Undermount', 0.375, 1.0, 0.65625, 0.5, 0.21875, 6.0, 3.5, 0.625)
             """)
         else:
-            # Migration update for baseline slides depth offset (21/32" Blum standard)
+            # Migration update for baseline slides depth offset and max material thickness
             cursor.execute("UPDATE slides SET min_depth_offset = 0.65625 WHERE min_depth_offset = 0.125")
+            cursor.execute("UPDATE slides SET max_material_thickness = 0.625 WHERE name LIKE '%5/8%' AND (max_material_thickness IS NULL OR max_material_thickness = 0)")
+            cursor.execute("UPDATE slides SET max_material_thickness = 0.500 WHERE name LIKE '%1/2%' AND (max_material_thickness IS NULL OR max_material_thickness = 0)")
+            cursor.execute("UPDATE slides SET max_material_thickness = 0.750 WHERE name LIKE '%3/4%' AND (max_material_thickness IS NULL OR max_material_thickness = 0)")
 
         # Create joint_bits table
         cursor.execute("""
@@ -108,7 +126,11 @@ def save_setup(
     drawer_w: float, 
     drawer_h: float, 
     slide_len: float,
-    slide_name: str = 'Blum Tandem (5/8" Wood)'
+    slide_name: str = 'Blum Tandem (5/8" Wood)',
+    material_thickness: float = 0.625,
+    joint_type: str = 'Butt Joint (Dominos / Dowels)',
+    bottom_thickness: float = 0.25,
+    dado_depth: float = 0.375
 ) -> bool:
     """Save or overwrite a calculation setup in the database."""
     init_db()
@@ -117,8 +139,8 @@ def save_setup(
         cursor = conn.cursor()
         cursor.execute("""
             INSERT OR REPLACE INTO drawer_setups 
-            (name, mode, cabinet_width, cabinet_height, drawer_width, drawer_height, slide_length, slide_name, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (name, mode, cabinet_width, cabinet_height, drawer_width, drawer_height, slide_length, slide_name, material_thickness, joint_type, bottom_thickness, dado_depth, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             name, 
             mode, 
@@ -128,6 +150,10 @@ def save_setup(
             drawer_h, 
             slide_len, 
             slide_name,
+            material_thickness,
+            joint_type,
+            bottom_thickness,
+            dado_depth,
             datetime.now().isoformat()
         ))
         conn.commit()
@@ -209,7 +235,8 @@ def save_slide(
     bottom_recess: float,
     extension_below: float,
     min_cab_width: float,
-    min_cab_height: float
+    min_cab_height: float,
+    max_material_thickness: float = 0.625
 ) -> bool:
     """Save or update a slide profile in the database."""
     init_db()
@@ -218,8 +245,8 @@ def save_slide(
         cursor = conn.cursor()
         cursor.execute("""
             INSERT OR REPLACE INTO slides 
-            (name, width_tolerance, height_tolerance, min_depth_offset, bottom_recess, extension_below, min_cab_width, min_cab_height)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            (name, width_tolerance, height_tolerance, min_depth_offset, bottom_recess, extension_below, min_cab_width, min_cab_height, max_material_thickness)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             name,
             width_tolerance,
@@ -228,8 +255,11 @@ def save_slide(
             bottom_recess,
             extension_below,
             min_cab_width,
-            min_cab_height
+            min_cab_height,
+            max_material_thickness
         ))
+        conn.commit()
+        return True
         conn.commit()
         return True
     except sqlite3.Error as e:
