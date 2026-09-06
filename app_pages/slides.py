@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 from src.storage import list_slides, save_slide, delete_slide
-from src.engine import float_to_fraction
+from src.engine import float_to_fraction, format_dimension_pair
 from src.ui_helpers import render_dimension_input
 
 st.markdown("""
@@ -62,10 +62,26 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# Sidebar Unit System
+st.sidebar.title("🔧 Settings")
+if "unit_system" not in st.session_state:
+    st.session_state.unit_system = "Fractional Inches (\")"
+
+unit_system = st.sidebar.radio(
+    "Unit System",
+    options=["Fractional Inches (\")", "Metric (mm)"],
+    key="unit_system",
+    help="Select primary unit format for displaying and defining slide profiles."
+)
+
 st.markdown('<div class="slides-title">🔧 Slide Configurations</div>', unsafe_allow_html=True)
-st.markdown('<div class="slides-subtitle">Manage slide profile tolerances, setbacks, and clearances.</div>', unsafe_allow_html=True)
+st.markdown(f'<div class="slides-subtitle">Manage slide profile tolerances, setbacks, and clearances. Active Unit: <strong>{unit_system}</strong>.</div>', unsafe_allow_html=True)
 
 col1, col2 = st.columns([6, 4])
+
+def fmt_pair(val):
+    p, s = format_dimension_pair(val, unit_system)
+    return f"{p} {s}"
 
 with col1:
     st.subheader("📋 Active Profiles")
@@ -89,28 +105,28 @@ with col1:
                     </div>
                     <div class="metric-grid">
                         <div class="metric-item">
-                            <span class="metric-label">Width Tolerance (clearance):</span>
-                            <strong>{float_to_fraction(slide['width_tolerance'])} ({slide['width_tolerance']:.3f}")</strong>
+                            <span class="metric-label">Width Tolerance:</span>
+                            <strong>{fmt_pair(slide['width_tolerance'])}</strong>
                         </div>
                         <div class="metric-item">
-                            <span class="metric-label">Height Tolerance (clearance):</span>
-                            <strong>{float_to_fraction(slide['height_tolerance'])} ({slide['height_tolerance']:.3f}")</strong>
+                            <span class="metric-label">Height Tolerance:</span>
+                            <strong>{fmt_pair(slide['height_tolerance'])}</strong>
                         </div>
                         <div class="metric-item">
                             <span class="metric-label">Min. Depth Offset:</span>
-                            <strong>{float_to_fraction(slide['min_depth_offset'])} ({slide['min_depth_offset']:.3f}")</strong>
+                            <strong>{fmt_pair(slide['min_depth_offset'])}</strong>
                         </div>
                         <div class="metric-item">
-                            <span class="metric-label">Drawer Bottom Recess:</span>
-                            <strong>{float_to_fraction(slide['bottom_recess'])} ({slide['bottom_recess']:.3f}")</strong>
+                            <span class="metric-label">Bottom Recess:</span>
+                            <strong>{fmt_pair(slide['bottom_recess'])}</strong>
                         </div>
                         <div class="metric-item">
-                            <span class="metric-label">Sides Extension Below:</span>
-                            <strong>{float_to_fraction(slide['extension_below'])} ({slide['extension_below']:.3f}")</strong>
+                            <span class="metric-label">Extension Below:</span>
+                            <strong>{fmt_pair(slide['extension_below'])}</strong>
                         </div>
                         <div class="metric-item">
-                            <span class="metric-label">Min. Carcass Width:</span>
-                            <strong>{float_to_fraction(slide['min_cab_width'])} ({slide['min_cab_width']:.3f}")</strong>
+                            <span class="metric-label">Min. Cab Width:</span>
+                            <strong>{fmt_pair(slide['min_cab_width'])}</strong>
                         </div>
                     </div>
                 </div>
@@ -136,15 +152,15 @@ with col2:
         
         c1, c2 = st.columns(2)
         with c1:
-            w_tol = render_dimension_input("Width Tolerance", key="new_slide_w_tol", default_val=0.375, min_val=0.0, max_val=2.0, help_text="Total width clearance (standard 3/8\").", sidebar=False)
-            h_tol = render_dimension_input("Height Tolerance", key="new_slide_h_tol", default_val=1.0, min_val=0.0, max_val=3.0, help_text="Total height clearance (standard 1\").", sidebar=False)
-            depth_offset = render_dimension_input("Min Depth Offset", key="new_slide_depth_offset", default_val=0.125, min_val=0.0, max_val=1.0, help_text="Setback offset beyond runner nominal length (standard 1/8\").", sidebar=False)
+            w_tol = render_dimension_input("Width Tolerance", key="new_slide_w_tol", default_val=0.375, min_val=0.0, max_val=2.0, help_text="Total width clearance.", sidebar=False, unit_system=unit_system)
+            h_tol = render_dimension_input("Height Tolerance", key="new_slide_h_tol", default_val=1.0, min_val=0.0, max_val=3.0, help_text="Total height clearance.", sidebar=False, unit_system=unit_system)
+            depth_offset = render_dimension_input("Min Depth Offset", key="new_slide_depth_offset", default_val=0.65625, min_val=0.0, max_val=2.0, help_text="Setback offset beyond runner nominal length.", sidebar=False, unit_system=unit_system)
         with c2:
-            recess = render_dimension_input("Bottom Recess", key="new_slide_recess", default_val=0.5, min_val=0.0, max_val=1.5, help_text="Recess height of drawer bottom (standard 1/2\").", sidebar=False)
-            ext_below = render_dimension_input("Extension Below", key="new_slide_ext_below", default_val=0.21875, min_val=0.0, max_val=1.0, help_text="Extension of drawer side walls below bottom (standard 7/32\").", sidebar=False)
-            min_w = render_dimension_input("Min Opening Width", key="new_slide_min_w", default_val=6.0, min_val=1.0, max_val=24.0, help_text="Minimum cabinet opening width (standard 6.0\").", sidebar=False)
+            recess = render_dimension_input("Bottom Recess", key="new_slide_recess", default_val=0.5, min_val=0.0, max_val=1.5, help_text="Recess height of drawer bottom.", sidebar=False, unit_system=unit_system)
+            ext_below = render_dimension_input("Extension Below", key="new_slide_ext_below", default_val=0.21875, min_val=0.0, max_val=1.0, help_text="Extension of drawer side walls below bottom.", sidebar=False, unit_system=unit_system)
+            min_w = render_dimension_input("Min Opening Width", key="new_slide_min_w", default_val=6.0, min_val=1.0, max_val=24.0, help_text="Minimum cabinet opening width.", sidebar=False, unit_system=unit_system)
             
-        min_h = render_dimension_input("Min Opening Height", key="new_slide_min_h", default_val=3.5, min_val=1.0, max_val=24.0, help_text="Minimum cabinet opening height (standard 3.5\").", sidebar=False)
+        min_h = render_dimension_input("Min Opening Height", key="new_slide_min_h", default_val=3.5, min_val=1.0, max_val=24.0, help_text="Minimum cabinet opening height.", sidebar=False, unit_system=unit_system)
         
         submit = st.form_submit_button("Add Profile", type="primary")
         

@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 from src.storage import list_joint_bits
-from src.engine import optimize_joint_layout, generate_joint_plot, float_to_fraction
+from src.engine import optimize_joint_layout, generate_joint_plot, float_to_fraction, format_dimension_pair
 from src.ui_helpers import render_dimension_input
 
 st.markdown("""
@@ -43,8 +43,20 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# Sidebar Unit System
+st.sidebar.title("🔧 Settings")
+if "unit_system" not in st.session_state:
+    st.session_state.unit_system = "Fractional Inches (\")"
+
+unit_system = st.sidebar.radio(
+    "Unit System",
+    options=["Fractional Inches (\")", "Metric (mm)"],
+    key="unit_system",
+    help="Select primary unit format for displaying joint calculations."
+)
+
 st.markdown('<div class="joint-title">📐 Joint Spacing Layout</div>', unsafe_allow_html=True)
-st.markdown('<div class="joint-subtitle">Compute symmetrical tail and pin heights for drawer boxes and check Blum undermount dado clearance.</div>', unsafe_allow_html=True)
+st.markdown(f'<div class="joint-subtitle">Compute symmetrical tail and pin heights for drawer boxes and check Blum undermount dado clearance. Active Unit: <strong>{unit_system}</strong>.</div>', unsafe_allow_html=True)
 
 # Query joint bits from the database
 db_bits = list_joint_bits()
@@ -86,11 +98,11 @@ with col1:
         b = next((x for x in filtered_bits if x["name"] == name), None)
         if not b:
             return name
-        dia_frac = float_to_fraction(b["diameter"]).replace('"', '')
+        p_dia, s_dia = format_dimension_pair(b["diameter"], unit_system)
         if b["bit_type"] == "dovetail":
-            return f"{name} ({dia_frac}\" @ {b['angle']:.0f}° Dovetail)"
+            return f"{name} ({p_dia} {s_dia} @ {b['angle']:.0f}° Dovetail)"
         else:
-            return f"{name} ({dia_frac}\" Box Joint)"
+            return f"{name} ({p_dia} {s_dia} Box Joint)"
 
     selected_bit_name = st.selectbox(
         "Leigh RTJ400 Bit Profile",
@@ -125,7 +137,8 @@ with col1:
             default_val=6.0,
             min_val=3.0,
             max_val=24.0,
-            sidebar=False
+            sidebar=False,
+            unit_system=unit_system
         )
     else:
         target_val = render_dimension_input(
@@ -134,7 +147,8 @@ with col1:
             default_val=8.0,
             min_val=4.0,
             max_val=24.0,
-            sidebar=False
+            sidebar=False,
+            unit_system=unit_system
         )
         st.caption("Valid box heights will be constrained to 0.5\" to 1.0\" below the front height.")
 
@@ -170,7 +184,7 @@ with col2:
             """, unsafe_allow_html=True)
         else:
             # Let user select from top valid heights
-            candidates = [f"{r['height']:.4f}\" ({float_to_fraction(r['height'])}) — Dev: {r['deviation']:.3f}\"" for r in results]
+            candidates = [f"{format_dimension_pair(r['height'], unit_system)[0]} {format_dimension_pair(r['height'], unit_system)[1]} — Dev: {r['deviation']:.3f}\"" for r in results]
             
             selected_idx = st.selectbox(
                 "Select Matching Symmetrical Height",
