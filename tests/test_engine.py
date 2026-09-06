@@ -3,6 +3,9 @@ from src.engine import (
     parse_dimension, 
     float_to_fraction, 
     round_to_32nd,
+    inches_to_mm,
+    mm_to_inches,
+    format_dimension_pair,
     calculate_drawer_box,
     generate_csv_cutlist,
     generate_txt_summary
@@ -14,6 +17,18 @@ class TestEngineDimensionParsing(unittest.TestCase):
         self.assertEqual(round_to_32nd(19.65625), 19.65625)  # 21/32
         self.assertEqual(round_to_32nd(19.6560), 19.65625)
         self.assertEqual(round_to_32nd(0.03125), 0.03125)
+
+    def test_unit_conversions(self):
+        self.assertAlmostEqual(inches_to_mm(20.0), 508.0, places=1)
+        self.assertAlmostEqual(mm_to_inches(508.0), 20.0, places=3)
+        
+        p_imp, s_imp = format_dimension_pair(20.0, "Fractional Inches (\")")
+        self.assertEqual(p_imp, '20"')
+        self.assertEqual(s_imp, '(508.0 mm)')
+
+        p_met, s_met = format_dimension_pair(20.0, "Metric (mm)")
+        self.assertEqual(p_met, '508.0 mm')
+        self.assertEqual(s_met, '(20")')
 
     def test_parse_dimension_decimals(self):
         val, err = parse_dimension("19.625")
@@ -27,6 +42,16 @@ class TestEngineDimensionParsing(unittest.TestCase):
         val, err = parse_dimension('19.625"')
         self.assertIsNone(err)
         self.assertEqual(val, 19.625)
+
+    def test_parse_dimension_metric(self):
+        # 508 mm = 20 inches
+        val, err = parse_dimension("508 mm", unit_system="Metric (mm)")
+        self.assertIsNone(err)
+        self.assertEqual(val, 20.0)
+
+        val, err = parse_dimension("508", unit_system="Metric (mm)")
+        self.assertIsNone(err)
+        self.assertEqual(val, 20.0)
 
     def test_parse_dimension_fractions(self):
         # Mixed fractions
@@ -73,15 +98,15 @@ class TestEngineDimensionParsing(unittest.TestCase):
     def test_export_generators(self):
         res = calculate_drawer_box(20.0, 6.0, 21.0)
         proj = "Kitchen Base Drawer 1"
-        csv_out = generate_csv_cutlist(res, project_name=proj)
+        csv_out = generate_csv_cutlist(res, project_name=proj, unit_system="Metric (mm)")
         self.assertIn("Project_Name", csv_out)
         self.assertIn(proj, csv_out)
-        self.assertIn("Cabinet Opening", csv_out)
+        self.assertIn("508.0 mm", csv_out)
 
-        txt_out = generate_txt_summary(res, project_name=proj)
+        txt_out = generate_txt_summary(res, project_name=proj, unit_system="Metric (mm)")
         self.assertIn("DRAWER CALCULATOR - CUT LIST & WORKSTATION SUMMARY", txt_out)
         self.assertIn(f"Project Name:     {proj}", txt_out)
-        self.assertIn("Side Panels (Qty: 2)", txt_out)
+        self.assertIn("508.0 mm", txt_out)
 
 if __name__ == '__main__':
     unittest.main()

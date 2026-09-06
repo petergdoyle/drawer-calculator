@@ -26,7 +26,7 @@ INSET_FRONT_SETBACK = 0.75  # 3/4" false front setback for inset drawers
 STANDARD_SLIDES = [9.0, 12.0, 15.0, 18.0, 21.0, 24.0, 27.0, 30.0]
 
 def float_to_fraction(val: float, max_denominator: int = 32) -> str:
-    """Convert float value to string fractional representation (e.g. 15 3/8", 15 21/32")."""
+    """Convert float value in inches to string fractional representation (e.g. 15 3/8", 15 21/32")."""
     if val is None or val <= 0:
         return '0"'
     whole = int(val)
@@ -44,64 +44,113 @@ def float_to_fraction(val: float, max_denominator: int = 32) -> str:
             return f'{f.numerator}/{f.denominator}"'
 
 def round_to_32nd(val: float) -> float:
-    """Round float value to nearest 1/32nd of an inch (0.03125")."""
+    """Round float value in inches to nearest 1/32nd of an inch (0.03125")."""
     if val is None:
         return 0.0
     return round(val * 32.0) / 32.0
 
-def parse_dimension(val: Any) -> Tuple[Optional[float], Optional[str]]:
+def inches_to_mm(inches: float) -> float:
+    """Convert inches to millimeters."""
+    if inches is None:
+        return 0.0
+    return inches * 25.4
+
+def mm_to_inches(mm: float) -> float:
+    """Convert millimeters to inches."""
+    if mm is None:
+        return 0.0
+    return mm / 25.4
+
+def format_dimension_pair(val_inches: float, unit_system: str = "Fractional Inches (\")") -> Tuple[str, str]:
     """
-    Parse a dimension input (string, int, or float) into a float rounded to 1/32" precision.
-    Returns a tuple of (parsed_float_value, error_message).
+    Format a value in inches into a (primary_string, secondary_string) pair.
+    If unit_system starts with 'Metric':
+        Primary: '511.2 mm'
+        Secondary: '(20 1/8")'
+    Otherwise (Fractional Inches):
+        Primary: '20 1/8"'
+        Secondary: '(511.2 mm)'
+    """
+    if val_inches is None or val_inches <= 0:
+        if unit_system.startswith("Metric"):
+            return "0 mm", "(0\")"
+        return '0"', "(0 mm)"
+
+    frac_str = float_to_fraction(val_inches)
+    mm_val = inches_to_mm(val_inches)
+    mm_str = f"{mm_val:.1f} mm"
+
+    if unit_system.startswith("Metric"):
+        return mm_str, f"({frac_str})"
+    else:
+        return frac_str, f"({mm_str})"
+
+def parse_dimension(val: Any, unit_system: str = "Fractional Inches (\")") -> Tuple[Optional[float], Optional[str]]:
+    """
+    Parse a dimension input (string, int, or float) into a float in INCHES rounded to 1/32" precision.
+    Returns a tuple of (parsed_inch_value, error_message).
     Supports formats like:
-      - 19.625, 19.625", 19
-      - 19 5/8, 19 5/8", 19-5/8, 19-5/8"
-      - 19 21/32, 21/32, 5/8"
+      - Imperial: 19.625, 19.625", 19 5/8, 19 21/32
+      - Metric: 500, 500mm, 500 mm, 511.2
     """
     if val is None:
         return None, "Empty input."
 
+    is_metric_mode = str(unit_system).startswith("Metric")
+
     if isinstance(val, (int, float)):
         if math.isnan(val) or math.isinf(val):
             return None, "Invalid numerical value."
-        return round_to_32nd(float(val)), None
+        f_val = float(val)
+        if is_metric_mode:
+            f_val = mm_to_inches(f_val)
+        return round_to_32nd(f_val), None
 
     s = str(val).strip()
     if not s:
         return None, "Empty input."
 
-    # Strip common units and quotes
-    s = re.sub(r'(?i)(inches|inch|in|["\'])', '', s).strip()
+    # Check explicit unit annotations in text input
+    has_mm = bool(re.search(r'(?i)\bmm\b', s))
+    has_inch = bool(re.search(r'(?i)(inches|inch|in|["\'])', s))
 
-    # Try plain float/int first
-    try:
-        f = float(s)
-        return round_to_32nd(f), None
-    except ValueError:
-        pass
+    # Strip unit words for numerical parsing
+    s_clean = re.sub(r'(?i)(inches|inch|in|mm|["\'])', '', s).strip()
 
-    # Regex for mixed fraction e.g. "19 5/8" or "19-5/8" or "19  5/8"
-    mixed_match = re.match(r'^(\d+)\s*[\s\-]\s*(\d+)\s*/\s*(\d+)$', s)
+    # If explicit fraction input e.g. "19 5/8" or "19-5/8"
+    mixed_match = re.match(r'^(\d+)\s*[\s\-]\s*(\d+)\s*/\s*(\d+)$', s_clean)
     if mixed_match:
         whole = int(mixed_match.group(1))
         num = int(mixed_match.group(2))
         denom = int(mixed_match.group(3))
         if denom == 0:
             return None, "Denominator cannot be zero."
-        res = whole + (num / denom)
-        return round_to_32nd(res), None
+        inch_res = whole + (num / denom)
+        return round_to_32nd(inch_res), None
 
-    # Regex for pure fraction e.g. "5/8" or "21/32"
-    frac_match = re.match(r'^(\d+)\s*/\s*(\d+)$', s)
+    # Pure fraction e.g. "5/8" or "21/32"
+    frac_match = re.match(r'^(\d+)\s*/\s*(\d+)$', s_clean)
     if frac_match:
         num = int(frac_match.group(1))
         denom = int(frac_match.group(2))
         if denom == 0:
             return None, "Denominator cannot be zero."
-        res = num / denom
-        return round_to_32nd(res), None
+        inch_res = num / denom
+        return round_to_32nd(inch_res), None
 
-    return None, f"Could not parse '{val}'. Try '19 5/8', '19.625', or '21/32'."
+    # Try plain float/int
+    try:
+        f = float(s_clean)
+        # Determine whether value is in mm or inches
+        if has_mm or (is_metric_mode and not has_inch):
+            inch_res = mm_to_inches(f)
+        else:
+            inch_res = f
+        return round_to_32nd(inch_res), None
+    except ValueError:
+        pass
+
+    return None, f"Could not parse '{val}'. Try '19 5/8', '19.625', or '500 mm'."
 
 
 def calculate_drawer_box(cabinet_w: float, cabinet_h: float, slide_len: float, slide_cfg: Dict[str, Any] = None) -> Dict[str, Any]:
@@ -216,7 +265,7 @@ def validate_inputs(width: float, height: float, slide_len: float, slide_cfg: Di
 
     return warnings
 
-def generate_svg(data: Dict[str, Any], slide_cfg: Dict[str, Any] = None, project_name: str = "Drawer Box Project") -> str:
+def generate_svg(data: Dict[str, Any], slide_cfg: Dict[str, Any] = None, project_name: str = "Drawer Box Project", unit_system: str = "Fractional Inches (\")") -> str:
     """
     Generate an interactive 2D wireframe SVG representation of the drawer box inside the carcass.
     """
@@ -262,13 +311,13 @@ def generate_svg(data: Dict[str, Any], slide_cfg: Dict[str, Any] = None, project
     ins_x = cab_x + (REVEAL * scale)
     ins_y = cab_y + (REVEAL * scale)
 
-    # Helper strings for labels
-    cab_w_str = float_to_fraction(cab_w)
-    cab_h_str = float_to_fraction(cab_h)
-    dr_w_str = float_to_fraction(dr_w)
-    dr_h_str = float_to_fraction(dr_h)
-    ins_w_str = float_to_fraction(ins_w)
-    ins_h_str = float_to_fraction(ins_h)
+    # Dimension pair strings based on active unit system
+    cab_w_p, cab_w_s = format_dimension_pair(cab_w, unit_system)
+    cab_h_p, cab_h_s = format_dimension_pair(cab_h, unit_system)
+    dr_w_p, dr_w_s = format_dimension_pair(dr_w, unit_system)
+    dr_h_p, dr_h_s = format_dimension_pair(dr_h, unit_system)
+    ins_w_p, _ = format_dimension_pair(ins_w, unit_system)
+    ins_h_p, _ = format_dimension_pair(ins_h, unit_system)
 
     # SVG definition
     svg = f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {vb_w} {vb_h}" width="100%" height="100%" style="background-color: #121214; border-radius: 12px; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
@@ -324,22 +373,22 @@ def generate_svg(data: Dict[str, Any], slide_cfg: Dict[str, Any] = None, project
         <!-- 5. Dimension Markers & Annotations -->
         <!-- Cabinet Width Dimension -->
         <line x1="{cab_x}" y1="{cab_y - 25}" x2="{cab_x + draw_cab_w}" y2="{cab_y - 25}" class="dim-line" marker-start="url(#arrow-start)" marker-end="url(#arrow-end)" />
-        <text x="{cab_x + draw_cab_w / 2}" y="{cab_y - 35}" class="text-cab">Cabinet Width: {cab_w_str} ({cab_w:.3f}")</text>
+        <text x="{cab_x + draw_cab_w / 2}" y="{cab_y - 35}" class="text-cab">Cabinet Width: {cab_w_p} {cab_w_s}</text>
  
         <!-- Cabinet Height Dimension -->
         <line x1="{cab_x - 25}" y1="{cab_y}" x2="{cab_x - 25}" y2="{cab_y + draw_cab_h}" class="dim-line" marker-start="url(#arrow-start)" marker-end="url(#arrow-end)" />
-        <text x="{cab_x - 35}" y="{cab_y + draw_cab_h / 2}" class="text-cab" transform="rotate(-90, {cab_x - 35}, {cab_y + draw_cab_h / 2})">Cabinet Height: {cab_h_str} ({cab_h:.3f}")</text>
+        <text x="{cab_x - 35}" y="{cab_y + draw_cab_h / 2}" class="text-cab" transform="rotate(-90, {cab_x - 35}, {cab_y + draw_cab_h / 2})">Cabinet Height: {cab_h_p} {cab_h_s}</text>
  
         <!-- Drawer Width Dimension -->
         <line x1="{dr_x}" y1="{dr_y + draw_dr_h / 2}" x2="{dr_x + draw_dr_w}" y2="{dr_y + draw_dr_h / 2}" class="dim-line" marker-start="url(#arrow-start)" marker-end="url(#arrow-end)" />
-        <text x="{dr_x + draw_dr_w / 2}" y="{dr_y + draw_dr_h / 2 - 8}" class="text-dr">Drawer Width: {dr_w_str} ({dr_w:.3f}")</text>
+        <text x="{dr_x + draw_dr_w / 2}" y="{dr_y + draw_dr_h / 2 - 8}" class="text-dr">Drawer Width: {dr_w_p} {dr_w_s}</text>
  
         <!-- Drawer Height Dimension -->
         <line x1="{dr_x + draw_dr_w / 2}" y1="{dr_y}" x2="{dr_x + draw_dr_w / 2}" y2="{dr_y + draw_dr_h}" class="dim-line" marker-start="url(#arrow-start)" marker-end="url(#arrow-end)" />
-        <text x="{dr_x + draw_dr_w / 2 - 8}" y="{dr_y + draw_dr_h / 2}" class="text-dr" transform="rotate(-90, {dr_x + draw_dr_w / 2 - 8}, {dr_y + draw_dr_h / 2})">Max Drawer Height: {dr_h_str} ({dr_h:.3f}")</text>
-
+        <text x="{dr_x + draw_dr_w / 2 - 8}" y="{dr_y + draw_dr_h / 2}" class="text-dr" transform="rotate(-90, {dr_x + draw_dr_w / 2 - 8}, {dr_y + draw_dr_h / 2})">Max Drawer Height: {dr_h_p} {dr_h_s}</text>
+ 
         <!-- Inset Front Label (Drawn in bottom right area) -->
-        <text x="{cab_x + draw_cab_w - 90}" y="{cab_y + draw_cab_h - 20}" class="text-ins">Inset Front: {ins_w_str} x {ins_h_str}</text>
+        <text x="{cab_x + draw_cab_w - 90}" y="{cab_y + draw_cab_h - 20}" class="text-ins">Inset Front: {ins_w_p} x {ins_h_p}</text>
         
         <!-- Material Thickness label -->
         <text x="{dr_x + draw_thick / 2}" y="{dr_y + 15}" class="text-thick" transform="rotate(-90, {dr_x + draw_thick / 2}, {dr_y + 15})">5/8"</text>
@@ -347,16 +396,21 @@ def generate_svg(data: Dict[str, Any], slide_cfg: Dict[str, Any] = None, project
     
     return svg
 
-def generate_csv_cutlist(results: Dict[str, Any], slide_cfg: Dict[str, Any] = None, project_name: str = "Drawer Box Project") -> str:
+
+def generate_csv_cutlist(results: Dict[str, Any], slide_cfg: Dict[str, Any] = None, project_name: str = "Drawer Box Project", unit_system: str = "Fractional Inches (\")") -> str:
     """Generate a CSV string representation of the drawer cut list."""
     output = io.StringIO()
     writer = csv.writer(output)
+    is_metric = unit_system.startswith("Metric")
+    p_name = "Primary" if is_metric else "Primary_Fractional"
+    s_name = "Secondary_Fractional" if is_metric else "Secondary_Metric"
+
     writer.writerow([
         "Project_Name",
         "Component", "Qty", 
-        "Width_Decimal", "Width_Fractional", 
-        "Height_Decimal", "Height_Fractional", 
-        "Depth_Decimal", "Depth_Fractional", 
+        f"Width_{p_name}", f"Width_{s_name}", 
+        f"Height_{p_name}", f"Height_{s_name}", 
+        f"Depth_{p_name}", f"Depth_{s_name}", 
         "Notes"
     ])
 
@@ -374,18 +428,40 @@ def generate_csv_cutlist(results: Dict[str, Any], slide_cfg: Dict[str, Any] = No
     min_dep_overlay = results.get("min_depth_overlay", d_dr + 0.65625)
     min_dep_inset = results.get("min_depth_inset", min_dep_overlay + 0.75)
 
-    writer.writerow([project_name, "Cabinet Opening", 1, f"{w_cab:.4f}", float_to_fraction(w_cab), f"{h_cab:.4f}", float_to_fraction(h_cab), f"{min_dep_overlay:.4f}", float_to_fraction(min_dep_overlay), f"Min overlay depth: {min_dep_overlay:.4f}\", Min inset depth: {min_dep_inset:.4f}\""])
-    writer.writerow([project_name, "Drawer Box Outside", 1, f"{w_dr:.4f}", float_to_fraction(w_dr), f"{h_dr:.4f}", float_to_fraction(h_dr), f"{d_dr:.4f}", float_to_fraction(d_dr), "Total external drawer dimensions (Max suggested height)"])
-    writer.writerow([project_name, "Side Panels", 2, "-", "-", f"{h_dr:.4f}", float_to_fraction(h_dr), f"{d_dr:.4f}", float_to_fraction(d_dr), "Left and right outer drawer walls (Max suggested height)"])
-    writer.writerow([project_name, "Front & Back Panels", 2, f"{in_w:.4f}", float_to_fraction(in_w), f"{h_dr:.4f}", float_to_fraction(h_dr), "-", "-", "Fit between sides (Calculated width: Outside Width - 1.25\")"])
-    writer.writerow([project_name, "Drawer Bottom Panel", 1, f"{bot_w:.4f}", float_to_fraction(bot_w), "-", "-", f"{bot_d:.4f}", float_to_fraction(bot_d), "Cut size including 1/4\" dado insertion on 4 sides"])
-    writer.writerow([project_name, "Inside Workspace Clearance", 1, f"{in_w:.4f}", float_to_fraction(in_w), "-", "-", f"{in_d:.4f}", float_to_fraction(in_d), "Maximum flat interior workspace clearance"])
-    writer.writerow([project_name, "Inset Front Reveal", 1, f"{w_ins:.4f}", float_to_fraction(w_ins), f"{h_ins:.4f}", float_to_fraction(h_ins), "-", "-", "Calculated with uniform 3/32\" reveal clearances"])
+    def pair(v):
+        p, s = format_dimension_pair(v, unit_system)
+        return p, s.strip("()")
+
+    w_cab_p, w_cab_s = pair(w_cab)
+    h_cab_p, h_cab_s = pair(h_cab)
+    min_ov_p, min_ov_s = pair(min_dep_overlay)
+    min_in_p, min_in_s = pair(min_dep_inset)
+
+    w_dr_p, w_dr_s = pair(w_dr)
+    h_dr_p, h_dr_s = pair(h_dr)
+    d_dr_p, d_dr_s = pair(d_dr)
+
+    in_w_p, in_w_s = pair(in_w)
+    in_d_p, in_d_s = pair(in_d)
+
+    bot_w_p, bot_w_s = pair(bot_w)
+    bot_d_p, bot_d_s = pair(bot_d)
+
+    w_ins_p, w_ins_s = pair(w_ins)
+    h_ins_p, h_ins_s = pair(h_ins)
+
+    writer.writerow([project_name, "Cabinet Opening", 1, w_cab_p, w_cab_s, h_cab_p, h_cab_s, min_ov_p, min_ov_s, f"Min overlay depth: {min_ov_p} {min_ov_s}, Min inset depth: {min_in_p} {min_in_s}"])
+    writer.writerow([project_name, "Drawer Box Outside", 1, w_dr_p, w_dr_s, h_dr_p, h_dr_s, d_dr_p, d_dr_s, "Total external drawer dimensions (Max suggested height)"])
+    writer.writerow([project_name, "Side Panels", 2, "-", "-", h_dr_p, h_dr_s, d_dr_p, d_dr_s, "Left and right outer drawer walls (Max suggested height)"])
+    writer.writerow([project_name, "Front & Back Panels", 2, in_w_p, in_w_s, h_dr_p, h_dr_s, "-", "-", "Fit between sides"])
+    writer.writerow([project_name, "Drawer Bottom Panel", 1, bot_w_p, bot_w_s, "-", "-", bot_d_p, bot_d_s, "Cut size including 1/4\" dado insertion on 4 sides"])
+    writer.writerow([project_name, "Inside Workspace Clearance", 1, in_w_p, in_w_s, "-", "-", in_d_p, in_d_s, "Maximum flat interior workspace clearance"])
+    writer.writerow([project_name, "Inset Front Reveal", 1, w_ins_p, w_ins_s, h_ins_p, h_ins_s, "-", "-", "Calculated with uniform 3/32\" reveal clearances"])
 
     return output.getvalue()
 
 
-def generate_txt_summary(results: Dict[str, Any], slide_cfg: Dict[str, Any] = None, project_name: str = "Drawer Box Project") -> str:
+def generate_txt_summary(results: Dict[str, Any], slide_cfg: Dict[str, Any] = None, project_name: str = "Drawer Box Project", unit_system: str = "Fractional Inches (\")") -> str:
     """Generate a clean text summary of the calculation results and cut list."""
     slide_name = slide_cfg["name"] if slide_cfg else results.get("slide_name", "Undermount Slide")
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
@@ -407,57 +483,62 @@ def generate_txt_summary(results: Dict[str, Any], slide_cfg: Dict[str, Any] = No
     recess = slide_cfg["bottom_recess"] if slide_cfg else 0.5
     ext_below = slide_cfg["extension_below"] if slide_cfg else 0.21875
 
+    def fmt(v):
+        p, s = format_dimension_pair(v, unit_system)
+        return f"{p} {s}"
+
     txt = f"""========================================================================
 📐 DRAWER CALCULATOR - CUT LIST & WORKSTATION SUMMARY
 Project Name:     {project_name}
+Active Unit System: {unit_system}
 Generated:        {now_str}
 Hardware Profile: {slide_name}
 Calculation Mode: {results.get('mode', 'drawer_box_mode').replace('_', ' ').title()}
 ========================================================================
 
 --- OVERALL SPECIFICATIONS ---
-Cabinet Opening Width:      {w_cab:.4f}" ({float_to_fraction(w_cab)})
-Cabinet Opening Height:     {h_cab:.4f}" ({float_to_fraction(h_cab)})
-Min. Overlay Carcass Depth: {min_dep_overlay:.4f}" ({float_to_fraction(min_dep_overlay)})
-Min. Inset Carcass Depth:   {min_dep_inset:.4f}" ({float_to_fraction(min_dep_inset)}) [Includes 3/4" Front Setback]
+Cabinet Opening Width:      {fmt(w_cab)}
+Cabinet Opening Height:     {fmt(h_cab)}
+Min. Overlay Carcass Depth: {fmt(min_dep_overlay)}
+Min. Inset Carcass Depth:   {fmt(min_dep_inset)} [Includes 3/4" Front Setback]
 
-Max Drawer Box Height:      {h_dr:.4f}" ({float_to_fraction(h_dr)}) [Max Suggested Clearance]
-Drawer Box Outside Width:   {w_dr:.4f}" ({float_to_fraction(w_dr)})
-Drawer Box Outside Depth:   {d_dr:.4f}" ({float_to_fraction(d_dr)})
+Max Drawer Box Height:      {fmt(h_dr)} [Max Suggested Clearance]
+Drawer Box Outside Width:   {fmt(w_dr)}
+Drawer Box Outside Depth:   {fmt(d_dr)}
 
-Inside Workspace Width:     {in_w:.4f}" ({float_to_fraction(in_w)})
-Inside Workspace Depth:     {in_d:.4f}" ({float_to_fraction(in_d)})
+Inside Workspace Width:     {fmt(in_w)}
+Inside Workspace Depth:     {fmt(in_d)}
 
-Inset Front Dimensions:     {w_ins:.4f}" x {h_ins:.4f}" ({float_to_fraction(w_ins)} x {float_to_fraction(h_ins)})
+Inset Front Dimensions:     {fmt(w_ins)} x {fmt(h_ins)}
 
 --- CUT LIST BREAKDOWN ---
 1. Side Panels (Qty: 2)
-   - Height: {h_dr:.4f}" ({float_to_fraction(h_dr)}) [Max Suggested Height]
-   - Length: {d_dr:.4f}" ({float_to_fraction(d_dr)})
-   - Material Thickness: 5/8" (0.625")
+   - Height: {fmt(h_dr)} [Max Suggested Height]
+   - Length: {fmt(d_dr)}
+   - Material Thickness: 5/8" (15.9 mm)
 
 2. Front & Back Panels (Qty: 2)
-   - Width:  {in_w:.4f}" ({float_to_fraction(in_w)})
-   - Height: {h_dr:.4f}" ({float_to_fraction(h_dr)})
-   - Material Thickness: 5/8" (0.625")
+   - Width:  {fmt(in_w)}
+   - Height: {fmt(h_dr)}
+   - Material Thickness: 5/8" (15.9 mm)
 
 3. Drawer Bottom Panel Cut Size (Qty: 1) [Housed in 1/4" Dado Grooves]
-   - Cut Width: {bot_w:.4f}" ({float_to_fraction(bot_w)})  [Inside Width + 1/2" Dado Insertion]
-   - Cut Depth: {bot_d:.4f}" ({float_to_fraction(bot_d)})  [Inside Depth + 1/2" Dado Insertion]
+   - Cut Width: {fmt(bot_w)}  [Inside Width + 1/2" Dado Insertion]
+   - Cut Depth: {fmt(bot_d)}  [Inside Depth + 1/2" Dado Insertion]
 
 4. Inside Workspace Clearance (Qty: 1)
-   - Clear Width: {in_w:.4f}" ({float_to_fraction(in_w)})
-   - Clear Depth: {in_d:.4f}" ({float_to_fraction(in_d)})
+   - Clear Width: {fmt(in_w)}
+   - Clear Depth: {fmt(in_d)}
 
 5. Inset Drawer Front (Qty: 1)
-   - Width:  {w_ins:.4f}" ({float_to_fraction(w_ins)})
-   - Height: {h_ins:.4f}" ({float_to_fraction(h_ins)})
-   - Clearance Reveal: 3/32" (0.09375") all around
+   - Width:  {fmt(w_ins)}
+   - Height: {fmt(h_ins)}
+   - Clearance Reveal: 3/32" (2.4 mm) all around
 
 --- HARDWARE & INSTALLATION SPECS ---
-- Bottom Recess Height:     {recess:.4f}" ({float_to_fraction(recess)})
-- Side Extension Below:     {ext_below:.5f}" ({float_to_fraction(ext_below)})
-- Rear Locking Dado Notch:  Standard 1/4" dado @ 1/2" up from bottom edge
+- Bottom Recess Height:     {fmt(recess)}
+- Side Extension Below:     {fmt(ext_below)}
+- Rear Locking Dado Notch:  Standard 1/4" (6.4 mm) dado @ 1/2" (12.7 mm) up from bottom edge
 
 ========================================================================
 """

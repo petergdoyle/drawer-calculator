@@ -7,6 +7,8 @@ from src.engine import (
     validate_inputs, 
     generate_svg, 
     float_to_fraction,
+    format_dimension_pair,
+    inches_to_mm,
     STANDARD_SLIDES,
     generate_csv_cutlist,
     generate_txt_summary
@@ -64,13 +66,14 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Metrics card builders
-def metric_card(title: str, value_decimal: float, value_fraction: str, color_theme: str = "blue"):
+def metric_card(title: str, val_inches: float, unit_system: str, color_theme: str = "blue"):
     theme_colors = {
         "blue": {"border": "#3b82f6", "text": "#38bdf8"},
         "amber": {"border": "#f59e0b", "text": "#fbbf24"},
         "green": {"border": "#10b981", "text": "#34d399"}
     }
     theme = theme_colors.get(color_theme, theme_colors["blue"])
+    p_str, s_str = format_dimension_pair(val_inches, unit_system)
     return f"""
     <div style="
         background-color: #1a1a24;
@@ -83,12 +86,20 @@ def metric_card(title: str, value_decimal: float, value_fraction: str, color_the
         margin-bottom: 1rem;
     ">
         <div style="font-size: 0.85rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">{title}</div>
-        <div style="font-size: 1.85rem; font-weight: 700; color: #f8fafc; line-height: 1.2;">{value_fraction}</div>
-        <div style="font-size: 1.15rem; font-weight: 600; color: {theme['text']}; margin-top: 0.25rem;">({value_decimal:.3f}")</div>
+        <div style="font-size: 1.85rem; font-weight: 700; color: #f8fafc; line-height: 1.2;">{p_str}</div>
+        <div style="font-size: 1.15rem; font-weight: 600; color: {theme['text']}; margin-top: 0.25rem;">{s_str}</div>
     </div>
     """
 
-def inset_front_card(title: str, w_dec: float, w_frac: str, h_dec: float, h_frac: str):
+def inset_front_card(title: str, w_inches: float, h_inches: float, unit_system: str):
+    is_metric = unit_system.startswith("Metric")
+    w_p, _ = format_dimension_pair(w_inches, unit_system)
+    h_p, _ = format_dimension_pair(h_inches, unit_system)
+    
+    other_sys = "Fractional Inches (\")" if is_metric else "Metric (mm)"
+    w_s, _ = format_dimension_pair(w_inches, other_sys)
+    h_s, _ = format_dimension_pair(h_inches, other_sys)
+
     return f"""
     <div style="
         background-color: #1a1a24;
@@ -101,13 +112,24 @@ def inset_front_card(title: str, w_dec: float, w_frac: str, h_dec: float, h_frac
         margin-bottom: 1rem;
     ">
         <div style="font-size: 0.85rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">{title}</div>
-        <div style="font-size: 1.5rem; font-weight: 700; color: #f8fafc; line-height: 1.2;">{w_frac} &times; {h_frac}</div>
-        <div style="font-size: 1.15rem; font-weight: 600; color: #34d399; margin-top: 0.25rem;">({w_dec:.3f}" &times; {h_dec:.3f}")</div>
+        <div style="font-size: 1.5rem; font-weight: 700; color: #f8fafc; line-height: 1.2;">{w_p} &times; {h_p}</div>
+        <div style="font-size: 1.15rem; font-weight: 600; color: #34d399; margin-top: 0.25rem;">({w_s} &times; {h_s})</div>
     </div>
     """
 
 # Sidebar Inputs & Initialization
 st.sidebar.title("🔧 Parameters")
+
+# Unit System Selection
+if "unit_system" not in st.session_state:
+    st.session_state.unit_system = "Fractional Inches (\")"
+
+unit_system = st.sidebar.radio(
+    "Unit System",
+    options=["Fractional Inches (\")", "Metric (mm)"],
+    key="unit_system",
+    help="Select primary unit format across inputs, cards, diagrams, and report exports."
+)
 
 # Initialize session states if empty
 if "project_name" not in st.session_state:
@@ -169,7 +191,8 @@ if mode == "Drawer Box Mode":
         default_val=20.0,
         min_val=1.0, 
         max_val=120.0, 
-        sidebar=True
+        sidebar=True,
+        unit_system=unit_system
     )
     cab_h = render_dimension_input(
         "Cabinet Opening Height", 
@@ -177,7 +200,8 @@ if mode == "Drawer Box Mode":
         default_val=6.0,
         min_val=1.0, 
         max_val=120.0, 
-        sidebar=True
+        sidebar=True,
+        unit_system=unit_system
     )
     slide_len = st.sidebar.selectbox(
         "Slide Nominal Length (in)", 
@@ -197,7 +221,8 @@ else:  # Carcass Mode
         default_val=19.625,
         min_val=1.0, 
         max_val=120.0, 
-        sidebar=True
+        sidebar=True,
+        unit_system=unit_system
     )
     dr_h = render_dimension_input(
         "Target Drawer Box Height", 
@@ -205,7 +230,8 @@ else:  # Carcass Mode
         default_val=5.0,
         min_val=1.0, 
         max_val=120.0, 
-        sidebar=True
+        sidebar=True,
+        unit_system=unit_system
     )
     slide_len = st.sidebar.selectbox(
         "Slide Nominal Length (in)", 
@@ -221,7 +247,7 @@ else:  # Carcass Mode
 # ----------------- MAIN LAYOUT -----------------
 
 st.markdown('<div class="app-title">📐 Drawer Calculator</div>', unsafe_allow_html=True)
-st.markdown(f'<div class="app-subtitle">Homelab tool dynamically configured for <strong>{slide_name}</strong> undermount drawer slides.</div>', unsafe_allow_html=True)
+st.markdown(f'<div class="app-subtitle">Homelab tool dynamically configured for <strong>{slide_name}</strong> undermount drawer slides. Active Unit: <strong>{unit_system}</strong>.</div>', unsafe_allow_html=True)
 
 # Split page into main content (Left) and persistence column (Right)
 main_col, db_col = st.columns([7, 3])
@@ -239,39 +265,38 @@ with main_col:
     with m_col1:
         st.markdown(metric_card(
             title="Drawer Box Width",
-            value_decimal=results["drawer_width"],
-            value_fraction=float_to_fraction(results["drawer_width"]),
+            val_inches=results["drawer_width"],
+            unit_system=unit_system,
             color_theme="amber"
         ), unsafe_allow_html=True)
         
     with m_col2:
         st.markdown(metric_card(
             title="Max Drawer Box Height",
-            value_decimal=results["drawer_height"],
-            value_fraction=float_to_fraction(results["drawer_height"]),
+            val_inches=results["drawer_height"],
+            unit_system=unit_system,
             color_theme="amber"
         ), unsafe_allow_html=True)
         
     with m_col3:
         st.markdown(metric_card(
             title="Drawer Outside Depth",
-            value_decimal=results["drawer_depth"],
-            value_fraction=float_to_fraction(results["drawer_depth"]),
+            val_inches=results["drawer_depth"],
+            unit_system=unit_system,
             color_theme="blue"
         ), unsafe_allow_html=True)
         
     with m_col4:
         st.markdown(inset_front_card(
             title="Inset Drawer Front",
-            w_dec=results["inset_width"],
-            w_frac=float_to_fraction(results["inset_width"]),
-            h_dec=results["inset_height"],
-            h_frac=float_to_fraction(results["inset_height"])
+            w_inches=results["inset_width"],
+            h_inches=results["inset_height"],
+            unit_system=unit_system
         ), unsafe_allow_html=True)
 
     # 3. Interactive SVG Expander
     with st.expander("🖼️ View Interactive 2D Cavity Overlay & Clearance Map", expanded=True):
-        svg_code = generate_svg(results, selected_slide_cfg, project_name=proj_name)
+        svg_code = generate_svg(results, selected_slide_cfg, project_name=proj_name, unit_system=unit_system)
         st.components.v1.html(svg_code, height=520, scrolling=False)
         st.caption(f"Figure: Wireframe diagram for '{proj_name}' showcasing Cabinet Cavity Opening (Dashed Blue), Inset Front Profile (Dashed Green), and Max Drawer Box Height clearance (Amber) with 5/8\" walls.")
 
@@ -288,55 +313,60 @@ with main_col:
     w_ins = results["inset_width"]
     h_ins = results["inset_height"]
     
-    # Inside pieces measurements (assume front & back pieces captured between side panels)
     in_w = results["inside_width"]
     in_d = results["inside_depth"]
     bot_w = results.get("bottom_width", in_w + 0.5)
     bot_d = results.get("bottom_depth", in_d + 0.5)
-    
-    w_cab_str = float_to_fraction(w_cab)
-    h_cab_str = float_to_fraction(h_cab)
-    w_dr_str = float_to_fraction(w_dr)
-    h_dr_str = float_to_fraction(h_dr)
-    d_dr_str = float_to_fraction(d_dr)
-    w_ins_str = float_to_fraction(w_ins)
-    h_ins_str = float_to_fraction(h_ins)
-    in_w_str = float_to_fraction(in_w)
-    in_d_str = float_to_fraction(in_d)
-    bot_w_str = float_to_fraction(bot_w)
-    bot_d_str = float_to_fraction(bot_d)
 
-    # Calculate min cabinet depth dynamically for Overlay and Inset
+    def pair_str(v):
+        p, s = format_dimension_pair(v, unit_system)
+        return f"{p}", f"{s}"
+
+    w_cab_p, w_cab_s = pair_str(w_cab)
+    h_cab_p, h_cab_s = pair_str(h_cab)
+    w_dr_p, w_dr_s = pair_str(w_dr)
+    h_dr_p, h_dr_s = pair_str(h_dr)
+    d_dr_p, d_dr_s = pair_str(d_dr)
+    w_ins_p, w_ins_s = pair_str(w_ins)
+    h_ins_p, h_ins_s = pair_str(h_ins)
+    in_w_p, in_w_s = pair_str(in_w)
+    in_d_p, in_d_s = pair_str(in_d)
+    bot_w_p, bot_w_s = pair_str(bot_w)
+    bot_d_p, bot_d_s = pair_str(bot_d)
+
     min_dep_overlay = results.get("min_depth_overlay", d_dr + 0.65625)
     min_dep_inset = results.get("min_depth_inset", min_dep_overlay + 0.75)
-    min_overlay_str = float_to_fraction(min_dep_overlay)
-    min_inset_str = float_to_fraction(min_dep_inset)
+    min_ov_p, min_ov_s = pair_str(min_dep_overlay)
+    min_in_p, min_in_s = pair_str(min_dep_inset)
+
+    p_header = "Primary Unit" if unit_system.startswith("Metric") else "Fractional Inch"
+    s_header = "Fractional Inch" if unit_system.startswith("Metric") else "Metric Equivalent"
 
     summary_md = f"""
-| Component | Metric (in) | Fractional | Qty | Notes / Woodworking Directions |
+| Component | {p_header} | {s_header} | Qty | Notes / Woodworking Directions |
 | :--- | :--- | :--- | :--- | :--- |
-| **Cabinet Opening** | {w_cab:.3f}" &times; {h_cab:.3f}" | {w_cab_str} &times; {h_cab_str} | 1 | Required opening space. Min depth: {min_overlay_str} ({min_dep_overlay:.3f}") Overlay / {min_inset_str} ({min_dep_inset:.3f}") Inset |
-| **Drawer Box Outside** | {w_dr:.3f}" &times; {h_dr:.3f}" &times; {d_dr:.3f}" | {w_dr_str} &times; {h_dr_str} &times; {d_dr_str} | 1 | Total external drawer dimensions (Max suggested height: {h_dr_str}). |
-| **Side Panels** | {d_dr:.3f}" &times; {h_dr:.3f}" | {d_dr_str} &times; {h_dr_str} | 2 | Left and right outer drawer walls (Max suggested height: {h_dr_str}). |
-| **Front & Back Panels** | {in_w:.3f}" &times; {h_dr:.3f}" | {in_w_str} &times; {h_dr_str} | 2 | Fit between sides. (Calculated width: Outside Width - 1.25"). |
-| **Drawer Bottom Panel** | {bot_w:.3f}" &times; {bot_d:.3f}" | {bot_w_str} &times; {bot_d_str} | 1 | Housed in 1/4" dado grooves (Includes 1/2" total insertion depth). |
-| **Inside Volume Space** | {in_w:.3f}" &times; {in_d:.3f}" | {in_w_str} &times; {in_d_str} | 1 | Maximum interior flat workspace clearance. |
-| **Inset Front Reveal** | {w_ins:.3f}" &times; {h_ins:.3f}" | {w_ins_str} &times; {h_ins_str} | 1 | Calculated with uniform 3/32" reveal clearances. |
+| **Cabinet Opening** | {w_cab_p} &times; {h_cab_p} | {w_cab_s} &times; {h_cab_s} | 1 | Opening space. Min depth: {min_ov_p} {min_ov_s} Overlay / {min_in_p} {min_in_s} Inset |
+| **Drawer Box Outside** | {w_dr_p} &times; {h_dr_p} &times; {d_dr_p} | {w_dr_s} &times; {h_dr_s} &times; {d_dr_s} | 1 | Total external drawer dimensions (Max suggested height: {h_dr_p}). |
+| **Side Panels** | {d_dr_p} &times; {h_dr_p} | {d_dr_s} &times; {h_dr_s} | 2 | Left and right outer drawer walls (Max suggested height: {h_dr_p}). |
+| **Front & Back Panels** | {in_w_p} &times; {h_dr_p} | {in_w_s} &times; {h_dr_s} | 2 | Fit between sides. (Calculated width: Outside Width - 1.25"). |
+| **Drawer Bottom Panel** | {bot_w_p} &times; {bot_d_p} | {bot_w_s} &times; {bot_d_s} | 1 | Housed in 1/4" dado grooves (Includes 1/2" total insertion depth). |
+| **Inside Volume Space** | {in_w_p} &times; {in_d_p} | {in_w_s} &times; {in_d_s} | 1 | Maximum interior flat workspace clearance. |
+| **Inset Front Reveal** | {w_ins_p} &times; {h_ins_p} | {w_ins_s} &times; {h_ins_s} | 1 | Calculated with uniform 3/32" reveal clearances. |
 """
     st.markdown(summary_md)
     
     if selected_slide_cfg:
-        recess_str = float_to_fraction(selected_slide_cfg["bottom_recess"])
-        ext_str = float_to_fraction(selected_slide_cfg["extension_below"])
-        st.info(f"💡 **Undermount Fit Tip**: **{slide_name}** slides require the drawer bottom to be recessed **{recess_str} ({selected_slide_cfg['bottom_recess']:.3f}\")** from the bottom edge of the drawer sides, and the drawer sides to extend **{ext_str} ({selected_slide_cfg['extension_below']:.5f}\")** below the drawer bottom to cover the runner mechanisms.")
+        recess_p, recess_s = format_dimension_pair(selected_slide_cfg["bottom_recess"], unit_system)
+        ext_p, ext_s = format_dimension_pair(selected_slide_cfg["extension_below"], unit_system)
+        st.info(f"💡 **Undermount Fit Tip**: **{slide_name}** slides require the drawer bottom to be recessed **{recess_p} {recess_s}** from the bottom edge of the drawer sides, and the drawer sides to extend **{ext_p} {ext_s}** below the drawer bottom to cover the runner mechanisms.")
 
     # 5. Export / Download Section
     st.subheader("📥 Export Calculation Results")
     dl_col1, dl_col2, dl_col3 = st.columns(3)
 
-    csv_data = generate_csv_cutlist(results, selected_slide_cfg, project_name=proj_name)
-    txt_data = generate_txt_summary(results, selected_slide_cfg, project_name=proj_name)
-    svg_code = generate_svg(results, selected_slide_cfg, project_name=proj_name)
+    csv_data = generate_csv_cutlist(results, selected_slide_cfg, project_name=proj_name, unit_system=unit_system)
+    txt_data = generate_txt_summary(results, selected_slide_cfg, project_name=proj_name, unit_system=unit_system)
+    svg_code = generate_svg(results, selected_slide_cfg, project_name=proj_name, unit_system=unit_system)
 
     clean_proj_slug = re.sub(r'[^a-zA-Z0-9_\-]+', '_', proj_name.strip()).lower().strip('_')
     if not clean_proj_slug:
