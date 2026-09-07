@@ -172,7 +172,9 @@ def calculate_drawer_box(
     material_thickness: float = 0.625,
     joint_type: str = 'Butt Joint (Dominos / Dowels)',
     bottom_thickness: float = 0.25,
-    dado_depth: float = 0.375
+    dado_depth: float = 0.375,
+    drawer_front_thickness: float = 0.75,
+    additional_setback: float = 0.0
 ) -> Dict[str, Any]:
     """
     Given Cabinet Opening size and slide configuration, calculate optimal Drawer Box dimensions.
@@ -194,7 +196,8 @@ def calculate_drawer_box(
 
     min_depth_offset = slide_cfg.get("min_depth_offset", 0.65625)
     min_depth_overlay = drawer_d + min_depth_offset
-    min_depth_inset = min_depth_overlay + INSET_FRONT_SETBACK
+    total_inset_setback = drawer_front_thickness + additional_setback
+    min_depth_inset = min_depth_overlay + total_inset_setback
 
     # Inset front details (reveal is applied all around the cabinet opening)
     inset_w = cabinet_w - (2 * REVEAL)
@@ -214,6 +217,9 @@ def calculate_drawer_box(
         "front_back_cut_width": front_back_cut_w,
         "dado_depth": dado_depth,
         "bottom_thickness": bottom_thickness,
+        "drawer_front_thickness": drawer_front_thickness,
+        "additional_setback": additional_setback,
+        "total_inset_setback": total_inset_setback,
         "inset_width": inset_w,
         "inset_height": inset_h,
         "min_depth_overlay": min_depth_overlay,
@@ -231,7 +237,9 @@ def calculate_cabinet_opening(
     material_thickness: float = 0.625,
     joint_type: str = 'Butt Joint (Dominos / Dowels)',
     bottom_thickness: float = 0.25,
-    dado_depth: float = 0.375
+    dado_depth: float = 0.375,
+    drawer_front_thickness: float = 0.75,
+    additional_setback: float = 0.0
 ) -> Dict[str, Any]:
     """
     Given target Drawer Box size and slide configuration, calculate required Cabinet Opening space.
@@ -243,7 +251,8 @@ def calculate_cabinet_opening(
     cabinet_h = drawer_h + slide_cfg["height_tolerance"]
     min_depth_offset = slide_cfg.get("min_depth_offset", 0.65625)
     min_depth_overlay = slide_len + min_depth_offset
-    min_depth_inset = min_depth_overlay + INSET_FRONT_SETBACK
+    total_inset_setback = drawer_front_thickness + additional_setback
+    min_depth_inset = min_depth_overlay + total_inset_setback
 
     inside_w = drawer_w - (2 * material_thickness)
     inside_d = slide_len - (2 * material_thickness)
@@ -271,6 +280,9 @@ def calculate_cabinet_opening(
         "front_back_cut_width": front_back_cut_w,
         "dado_depth": dado_depth,
         "bottom_thickness": bottom_thickness,
+        "drawer_front_thickness": drawer_front_thickness,
+        "additional_setback": additional_setback,
+        "total_inset_setback": total_inset_setback,
         "inset_width": inset_w,
         "inset_height": inset_h,
         "min_depth_overlay": min_depth_overlay,
@@ -483,8 +495,11 @@ def generate_csv_cutlist(results: Dict[str, Any], slide_cfg: Dict[str, Any] = No
     dado_d = results.get("dado_depth", 0.375)
     w_ins = results["inset_width"]
     h_ins = results["inset_height"]
+    dr_front_thick = results.get("drawer_front_thickness", 0.75)
+    add_setback = results.get("additional_setback", 0.0)
+    tot_setback = results.get("total_inset_setback", dr_front_thick + add_setback)
     min_dep_overlay = results.get("min_depth_overlay", d_dr + 0.65625)
-    min_dep_inset = results.get("min_depth_inset", min_dep_overlay + 0.75)
+    min_dep_inset = results.get("min_depth_inset", min_dep_overlay + tot_setback)
 
     def pair(v):
         p, s = format_dimension_pair(v, unit_system)
@@ -510,7 +525,7 @@ def generate_csv_cutlist(results: Dict[str, Any], slide_cfg: Dict[str, Any] = No
     w_ins_p, w_ins_s = pair(w_ins)
     h_ins_p, h_ins_s = pair(h_ins)
 
-    writer.writerow([project_name, "Cabinet Opening", 1, w_cab_p, w_cab_s, h_cab_p, h_cab_s, min_ov_p, min_ov_s, f"Min overlay depth: {min_ov_p} {min_ov_s}, Min inset depth: {min_in_p} {min_in_s}"])
+    writer.writerow([project_name, "Cabinet Opening", 1, w_cab_p, w_cab_s, h_cab_p, h_cab_s, min_ov_p, min_ov_s, f"Min overlay depth: {min_ov_p} {min_ov_s}, Min inset depth: {min_in_p} {min_in_s} (Includes {float_to_fraction(tot_setback)} total setback)"])
     writer.writerow([project_name, "Drawer Box Outside", 1, w_dr_p, w_dr_s, h_dr_p, h_dr_s, d_dr_p, d_dr_s, "Total external drawer dimensions (Max suggested height)"])
     writer.writerow([project_name, "Side Panels", 2, "-", "-", h_dr_p, h_dr_s, d_dr_p, d_dr_s, f"Left and right outer drawer walls ({float_to_fraction(mat_thick)} thick)"])
     writer.writerow([project_name, "Front & Back Panels", 2, fb_cut_p, fb_cut_s, h_dr_p, h_dr_s, "-", "-", f"Cut width for {joint_type} ({float_to_fraction(mat_thick)} thick)"])
@@ -543,9 +558,12 @@ def generate_txt_summary(results: Dict[str, Any], slide_cfg: Dict[str, Any] = No
     dado_d = results.get("dado_depth", 0.375)
     w_ins = results["inset_width"]
     h_ins = results["inset_height"]
+    dr_front_thick = results.get("drawer_front_thickness", 0.75)
+    add_setback = results.get("additional_setback", 0.0)
+    tot_setback = results.get("total_inset_setback", dr_front_thick + add_setback)
 
     min_dep_overlay = results.get("min_depth_overlay", d_dr + 0.65625)
-    min_dep_inset = results.get("min_depth_inset", min_dep_overlay + 0.75)
+    min_dep_inset = results.get("min_depth_inset", min_dep_overlay + tot_setback)
     recess = slide_cfg["bottom_recess"] if slide_cfg else 0.5
     ext_below = slide_cfg["extension_below"] if slide_cfg else 0.21875
 
@@ -566,7 +584,7 @@ Calculation Mode: {results.get('mode', 'drawer_box_mode').replace('_', ' ').titl
 Cabinet Opening Width:      {fmt(w_cab)}
 Cabinet Opening Height:     {fmt(h_cab)}
 Min. Overlay Carcass Depth: {fmt(min_dep_overlay)}
-Min. Inset Carcass Depth:   {fmt(min_dep_inset)} [Includes 3/4" Front Setback]
+Min. Inset Carcass Depth:   {fmt(min_dep_inset)} [Includes {fmt(tot_setback)} Total Setback]
 
 Max Drawer Box Height:      {fmt(h_dr)} [Max Suggested Clearance]
 Drawer Box Outside Width:   {fmt(w_dr)}
@@ -578,6 +596,9 @@ Drawer Wood Thickness:      {fmt(mat_thick)}
 Box Joinery Type:           {joint_type}
 Bottom Panel Thickness:     {fmt(bot_thick)}
 Dado Groove Insertion:      {fmt(dado_d)}
+Drawer Front Thickness:     {fmt(dr_front_thick)}
+Additional Setback:         {fmt(add_setback)}
+Total Inset Setback:        {fmt(tot_setback)}
 
 Inset Front Dimensions:     {fmt(w_ins)} x {fmt(h_ins)}
 

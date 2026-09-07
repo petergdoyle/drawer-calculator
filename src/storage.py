@@ -42,6 +42,10 @@ def init_db() -> None:
             cursor.execute("ALTER TABLE drawer_setups ADD COLUMN bottom_thickness REAL DEFAULT 0.25")
         if 'dado_depth' not in columns:
             cursor.execute("ALTER TABLE drawer_setups ADD COLUMN dado_depth REAL DEFAULT 0.375")
+        if 'drawer_front_thickness' not in columns:
+            cursor.execute("ALTER TABLE drawer_setups ADD COLUMN drawer_front_thickness REAL DEFAULT 0.75")
+        if 'additional_setback' not in columns:
+            cursor.execute("ALTER TABLE drawer_setups ADD COLUMN additional_setback REAL DEFAULT 0.0")
 
         # Create slides table
         cursor.execute("""
@@ -130,7 +134,9 @@ def save_setup(
     material_thickness: float = 0.625,
     joint_type: str = 'Butt Joint (Dominos / Dowels)',
     bottom_thickness: float = 0.25,
-    dado_depth: float = 0.375
+    dado_depth: float = 0.375,
+    drawer_front_thickness: float = 0.75,
+    additional_setback: float = 0.0
 ) -> bool:
     """Save or overwrite a calculation setup in the database."""
     init_db()
@@ -139,8 +145,8 @@ def save_setup(
         cursor = conn.cursor()
         cursor.execute("""
             INSERT OR REPLACE INTO drawer_setups 
-            (name, mode, cabinet_width, cabinet_height, drawer_width, drawer_height, slide_length, slide_name, material_thickness, joint_type, bottom_thickness, dado_depth, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (name, mode, cabinet_width, cabinet_height, drawer_width, drawer_height, slide_length, slide_name, material_thickness, joint_type, bottom_thickness, dado_depth, drawer_front_thickness, additional_setback, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             name, 
             mode, 
@@ -154,6 +160,8 @@ def save_setup(
             joint_type,
             bottom_thickness,
             dado_depth,
+            drawer_front_thickness,
+            additional_setback,
             datetime.now().isoformat()
         ))
         conn.commit()

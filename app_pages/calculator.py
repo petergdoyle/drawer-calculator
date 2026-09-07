@@ -156,6 +156,10 @@ if "bottom_thickness" not in st.session_state:
     st.session_state.bottom_thickness = 0.25
 if "dado_depth" not in st.session_state:
     st.session_state.dado_depth = 0.375
+if "drawer_front_thickness" not in st.session_state:
+    st.session_state.drawer_front_thickness = 0.75
+if "additional_setback" not in st.session_state:
+    st.session_state.additional_setback = 0.0
 
 # Fetch slides from database
 active_slides = list_slides()
@@ -179,7 +183,9 @@ def get_current_snapshot():
         'material_thickness': float(st.session_state.get('material_thickness', 0.625)),
         'joint_type': st.session_state.get('joint_type', 'Butt Joint (Dominos / Dowels)'),
         'bottom_thickness': float(st.session_state.get('bottom_thickness', 0.25)),
-        'dado_depth': float(st.session_state.get('dado_depth', 0.375))
+        'dado_depth': float(st.session_state.get('dado_depth', 0.375)),
+        'drawer_front_thickness': float(st.session_state.get('drawer_front_thickness', 0.75)),
+        'additional_setback': float(st.session_state.get('additional_setback', 0.0))
     }
 
 if "saved_snapshot" not in st.session_state:
@@ -207,6 +213,10 @@ def reset_to_new_project():
     st.session_state["bottom_thickness_text"] = "1/4"
     st.session_state["dado_depth"] = 0.375
     st.session_state["dado_depth_text"] = "3/8"
+    st.session_state["drawer_front_thickness"] = 0.75
+    st.session_state["drawer_front_thickness_text"] = "3/4"
+    st.session_state["additional_setback"] = 0.0
+    st.session_state["additional_setback_text"] = "0"
     st.session_state["pending_action"] = None
     st.session_state.saved_snapshot = get_current_snapshot()
 
@@ -222,6 +232,8 @@ def handle_save_setup_callback():
     
     b_thick = float(st.session_state.get("bottom_thickness", 0.25))
     d_depth = float(st.session_state.get("dado_depth", 0.375))
+    dr_front_thick = float(st.session_state.get("drawer_front_thickness", 0.75))
+    add_setback = float(st.session_state.get("additional_setback", 0.0))
     
     saved = save_setup(
         name=name_to_save,
@@ -235,7 +247,9 @@ def handle_save_setup_callback():
         material_thickness=float(st.session_state.get("material_thickness", 0.625)),
         joint_type=st.session_state.get("joint_type", "Butt Joint (Dominos / Dowels)"),
         bottom_thickness=b_thick,
-        dado_depth=d_depth
+        dado_depth=d_depth,
+        drawer_front_thickness=dr_front_thick,
+        additional_setback=add_setback
     )
     
     if saved:
@@ -256,7 +270,9 @@ def handle_save_setup_callback():
             'material_thickness': float(st.session_state.get('material_thickness', 0.625)),
             'joint_type': st.session_state.get('joint_type', ''),
             'bottom_thickness': b_thick,
-            'dado_depth': d_depth
+            'dado_depth': d_depth,
+            'drawer_front_thickness': dr_front_thick,
+            'additional_setback': add_setback
         }
     else:
         st.session_state["save_error_msg"] = f"Failed to save configuration '{name_to_save}'. A configuration with this name may already exist."
@@ -293,6 +309,14 @@ def load_setup_callback(setup_item):
     d_depth = float(setup_item.get('dado_depth', 0.375))
     st.session_state["dado_depth"] = d_depth
     st.session_state["dado_depth_text"] = float_to_fraction(d_depth).replace('"', '')
+
+    dr_front_thick = float(setup_item.get('drawer_front_thickness', 0.75))
+    st.session_state["drawer_front_thickness"] = dr_front_thick
+    st.session_state["drawer_front_thickness_text"] = float_to_fraction(dr_front_thick).replace('"', '')
+
+    add_setback = float(setup_item.get('additional_setback', 0.0))
+    st.session_state["additional_setback"] = add_setback
+    st.session_state["additional_setback_text"] = float_to_fraction(add_setback).replace('"', '') if add_setback > 0 else "0"
     
     st.session_state["pending_action"] = None
     st.session_state.saved_snapshot = {
@@ -307,7 +331,9 @@ def load_setup_callback(setup_item):
         'material_thickness': m_thick,
         'joint_type': setup_item.get('joint_type', 'Butt Joint (Dominos / Dowels)'),
         'bottom_thickness': b_thick,
-        'dado_depth': d_depth
+        'dado_depth': d_depth,
+        'drawer_front_thickness': dr_front_thick,
+        'additional_setback': add_setback
     }
 
 def delete_setup_callback(setup_id):
@@ -396,6 +422,30 @@ dado_d = render_dimension_input(
     unit_system=unit_system
 )
 
+# Drawer Front & Setback Specs
+st.sidebar.subheader("Drawer Front & Setback Specs")
+dr_front_thick = render_dimension_input(
+    "Drawer Front Thickness",
+    key="drawer_front_thickness",
+    default_val=0.75,
+    min_val=0.25,
+    max_val=2.0,
+    help_text="Thickness of the decorative false drawer front overlaying or inset into the cabinet opening (default 3/4\").",
+    sidebar=True,
+    unit_system=unit_system
+)
+
+add_setback = render_dimension_input(
+    "Additional Setback",
+    key="additional_setback",
+    default_val=0.0,
+    min_val=0.0,
+    max_val=3.0,
+    help_text="Extra recessed depth setback behind face frame/carcass edge for custom furniture styles like Shaker inset fronts or beaded frames (default 0\").",
+    sidebar=True,
+    unit_system=unit_system
+)
+
 # Sidebar calculation mode selector
 mode = st.sidebar.selectbox(
     "Calculation Mode", 
@@ -438,7 +488,8 @@ if mode == "Drawer Box Mode":
     results = calculate_drawer_box(
         cab_w, cab_h, slide_len, selected_slide_cfg,
         material_thickness=mat_thick, joint_type=joint_type,
-        bottom_thickness=bot_thick, dado_depth=dado_d
+        bottom_thickness=bot_thick, dado_depth=dado_d,
+        drawer_front_thickness=dr_front_thick, additional_setback=add_setback
     )
     warnings = validate_inputs(cab_w, cab_h, slide_len, selected_slide_cfg, material_thickness=mat_thick)
 
@@ -475,7 +526,8 @@ else:  # Carcass Mode
     results = calculate_cabinet_opening(
         dr_w, dr_h, slide_len, selected_slide_cfg,
         material_thickness=mat_thick, joint_type=joint_type,
-        bottom_thickness=bot_thick, dado_depth=dado_d
+        bottom_thickness=bot_thick, dado_depth=dado_d,
+        drawer_front_thickness=dr_front_thick, additional_setback=add_setback
     )
     # Validate calculated cabinet sizes
     warnings = validate_inputs(results["cabinet_width"], results["cabinet_height"], slide_len, selected_slide_cfg, material_thickness=mat_thick)
@@ -593,9 +645,10 @@ with main_col:
     mat_thick_p, mat_thick_s = pair_str(mat_thick)
     bot_thick_p, bot_thick_s = pair_str(bot_thick)
     dado_d_p, dado_d_s = pair_str(dado_d)
+    tot_setback = results.get("total_inset_setback", dr_front_thick + add_setback)
 
     min_dep_overlay = results.get("min_depth_overlay", d_dr + 0.65625)
-    min_dep_inset = results.get("min_depth_inset", min_dep_overlay + 0.75)
+    min_dep_inset = results.get("min_depth_inset", min_dep_overlay + tot_setback)
     min_ov_p, min_ov_s = pair_str(min_dep_overlay)
     min_in_p, min_in_s = pair_str(min_dep_inset)
 
@@ -605,7 +658,7 @@ with main_col:
     summary_md = f"""
 | Component | {p_header} | {s_header} | Qty | Notes / Woodworking Directions |
 | :--- | :--- | :--- | :--- | :--- |
-| **Cabinet Opening** | {w_cab_p} &times; {h_cab_p} | {w_cab_s} &times; {h_cab_s} | 1 | Opening space. Min depth: {min_ov_p} {min_ov_s} Overlay / {min_in_p} {min_in_s} Inset |
+| **Cabinet Opening** | {w_cab_p} &times; {h_cab_p} | {w_cab_s} &times; {h_cab_s} | 1 | Opening space. Min depth: {min_ov_p} {min_ov_s} Overlay / {min_in_p} {min_in_s} Inset ({float_to_fraction(tot_setback)} setback) |
 | **Drawer Box Outside** | {w_dr_p} &times; {h_dr_p} &times; {d_dr_p} | {w_dr_s} &times; {h_dr_s} &times; {d_dr_s} | 1 | Total external drawer dimensions (Max suggested height: {h_dr_p}). |
 | **Side Panels** | {d_dr_p} &times; {h_dr_p} | {d_dr_s} &times; {h_dr_s} | 2 | Left and right outer drawer walls ({mat_thick_p} thick). |
 | **Front & Back Panels** | {fb_cut_p} &times; {h_dr_p} | {fb_cut_s} &times; {h_dr_s} | 2 | Cut width for {joint_type} ({mat_thick_p} thick). |
@@ -692,6 +745,8 @@ with db_col:
             saved_joint = item.get('joint_type', 'Butt Joint (Dominos / Dowels)')
             saved_bot = float(item.get('bottom_thickness', 0.25))
             saved_dado = float(item.get('dado_depth', 0.375))
+            saved_front = float(item.get('drawer_front_thickness', 0.75))
+            saved_setback = float(item.get('additional_setback', 0.0))
             with st.container():
                 st.markdown(f"""
                 <div style="border: 1px solid #2d2d30; padding: 0.75rem; border-radius: 8px; margin-bottom: 0.5rem; background-color: #121214;">
@@ -702,6 +757,7 @@ with db_col:
                         Profile: {saved_slide_name}<br>
                         Wood: {float_to_fraction(saved_mat)} | Joint: {saved_joint}<br>
                         Bottom: {float_to_fraction(saved_bot)} ({float_to_fraction(saved_dado)} dado)<br>
+                        Front: {float_to_fraction(saved_front)} | Setback: {float_to_fraction(saved_setback)}<br>
                         Cab: {float_to_fraction(item['cabinet_width'])} x {float_to_fraction(item['cabinet_height'])}
                     </div>
                 </div>

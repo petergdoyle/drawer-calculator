@@ -140,5 +140,18 @@ class TestEngineDimensionParsing(unittest.TestCase):
         self.assertEqual(res_half["bottom_thickness"], 0.375)
         self.assertEqual(res_half["dado_depth"], 0.500)
 
+    def test_custom_front_thickness_and_setback(self):
+        # Default 3/4" front thickness, 0" additional setback -> total setback 0.75"
+        res_def = calculate_drawer_box(20.0, 6.0, 21.0, drawer_front_thickness=0.75, additional_setback=0.0)
+        # min_depth_overlay = 21.0 + 0.65625 = 21.65625
+        # min_depth_inset = 21.65625 + 0.75 = 22.40625
+        self.assertEqual(res_def["total_inset_setback"], 0.75)
+        self.assertEqual(res_def["min_depth_inset"], 22.40625)
+
+        # Custom 7/8" front thickness (0.875") + 1/4" additional setback (0.25") -> total setback 1.125"
+        res_custom = calculate_drawer_box(20.0, 6.0, 21.0, drawer_front_thickness=0.875, additional_setback=0.25)
+        self.assertEqual(res_custom["total_inset_setback"], 1.125)
+        self.assertEqual(res_custom["min_depth_inset"], 21.65625 + 1.125)
+
 if __name__ == '__main__':
     unittest.main()
